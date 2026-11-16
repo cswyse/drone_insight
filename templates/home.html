@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% from "_macros.html" import news_row, thumb %}
+{% block content %}
+<section class="hero">
+  <div class="wrap">
+    <div>
+      <h1>{{ brand.tagline }}</h1>
+      <p class="lead">{{ brand.lead }}</p>
+      <div class="actions">
+        <a class="btn" href="{{ url_for('dashboard') }}">Open the dashboard</a>
+        <a class="btn ghost" href="{{ url_for('news_list') }}">Read the latest news</a>
+      </div>
+    </div>
+    <div class="hero-visual">
+      <canvas id="hero-canvas" aria-label="Animated globe with moving connections" role="img"></canvas>
+      <div class="hero-caption">Drag to rotate</div>
+    </div>
+  </div>
+</section>
+
+<section class="statbar">
+  <div class="wrap">
+    <div class="stat"><b>{{ stats.countries }}</b><span>Countries</span></div>
+    <div class="stat"><b>{{ stats.subsectors }} &times; {{ stats.verticals }}</b><span>Sub-sectors and verticals</span></div>
+    <div class="stat"><b>{{ stats.companies }}</b><span>Companies profiled</span></div>
+    <div class="stat"><b>{{ '{:,}'.format(stats.datapoints) }}</b><span>Data points in the model</span></div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>One platform, four ways to understand a market</h2>
+      <p>Every page connects to the others, so a headline in the news leads straight into the numbers behind it.</p>
+    </div>
+    <div class="features">
+      <a class="feature primary" href="{{ url_for('dashboard') }}">
+        <h3>Market intelligence dashboard</h3>
+        <p>View market size and news by country, sub-sector, vertical or company. Click any row to filter, then keep going until you reach a company's financials.</p>
+        <span class="more">Open the dashboard</span>
+      </a>
+      <a class="feature" href="{{ url_for('news_list') }}">
+        <h3>News</h3>
+        <p>Earnings, deals, launches and market developments. The same stories appear in the dashboard's news panels.</p>
+        <span class="more">See the latest</span>
+      </a>
+      <a class="feature" href="{{ url_for('dashboard', view='company') }}">
+        <h3>Company profiles</h3>
+        <p>Five-year financials, margins, revenue mix and peers for every company tracked.</p>
+        <span class="more">Browse companies</span>
+      </a>
+      <a class="feature" href="{{ url_for('whitepapers') }}">
+        <h3>White papers</h3>
+        <p>Long-form analysis of the forces shaping the market. Free to read.</p>
+        <span class="more">Read white papers</span>
+      </a>
+      <a class="feature" href="{{ url_for('reports') }}">
+        <h3>Market reports</h3>
+        <p>In-depth paid reports with forecasts, data packs and company benchmarks.</p>
+        <span class="more">View reports</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<section class="section soft">
+  <div class="wrap two-col" style="align-items:center">
+    <div>
+      <h2>The market in {{ year_now }}</h2>
+      <p class="muted" style="max-width:30em">The global market is estimated at US${{ '{:,.0f}'.format(stats.global_2026) }} bn in {{ year_now }}. The five largest countries account for most of it, and growth is moving toward faster-growing economies and digital delivery.</p>
+      <table class="data" style="max-width:30em;margin-bottom:18px">
+        <thead><tr><th>Country</th><th>{{ year_now }}E (US$ bn)</th><th>Share</th></tr></thead>
+        <tbody>
+        {% for r in top_countries %}
+          <tr><td class="name"><a href="{{ url_for('dashboard', country=r.id, view='subsector') }}">{{ r.name }}</a></td><td>{{ fmt_bn(r.size) }}</td><td>{{ fmt_pct(r.share, 0) }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      <a class="link-arrow" href="{{ url_for('dashboard', view='country') }}">Explore all countries</a>
+    </div>
+    <div class="card pad">
+      <h3>Global market size, US$ bn</h3>
+      <div id="chart-bars"></div>
+      <script type="application/json" id="data-bars">{{ {'data': series, 'unit': 'US$ bn', 'dec': 0, 'label': 'Global market size'}|tojson }}</script>
+    </div>
+  </div>
+</section>
+
+<section class="section dark">
+  <div class="wrap">
+    <div class="section-head"><h2>From market to company in four clicks</h2><p>Each step narrows the view while the figures, charts and news update together.</p></div>
+    <div class="steps">
+      <div class="step"><h4>Pick a country</h4><p>See its market size, growth and the latest news affecting it.</p></div>
+      <div class="step"><h4>Choose a sub-sector</h4><p>Break the country market into the activities that make it up.</p></div>
+      <div class="step"><h4>Choose a vertical</h4><p>See which customer groups drive demand in that slice.</p></div>
+      <div class="step"><h4>Open a company</h4><p>Read its financials, revenue mix, market share and news.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>Latest news</h2>
+      <a class="link-arrow" href="{{ url_for('news_list') }}">All news</a>
+    </div>
+    <div class="grid-2 news-grid">
+      {% for n in latest %}{{ news_row(n) }}{% endfor %}
+    </div>
+  </div>
+</section>
+
+<section class="section soft">
+  <div class="wrap">
+    <div class="section-head"><h2>Research</h2><p>Free white papers for context, and paid reports for the full dataset and forecasts.</p></div>
+    <div class="grid-2">
+      {% for p in papers %}
+      <a class="paper-card" href="{{ url_for('whitepaper', slug=p.slug) }}">
+        {{ thumb(p.cover) }}
+        <div class="small muted">White paper &middot; {{ fmt_date(p.date) }}</div>
+        <h3 style="margin-top:6px">{{ p.title }}</h3><p>{{ p.summary }}</p>
+      </a>
+      {% endfor %}
+      {% for r in reports %}
+      <a class="report-card" href="{{ url_for('report', slug=r.slug) }}">
+        {{ thumb(r.cover) }}
+        <div class="small muted">Report &middot; {{ r.meta.pages }} pages &middot; {{ fmt_date(r.date) }}</div>
+        <h3 style="margin-top:6px">{{ r.title }}</h3><p>{{ r.meta.subtitle }}</p>
+        <div class="price">{{ money(r.meta.price) }}</div>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/hero3d.js') }}"></script>{% endblock %}

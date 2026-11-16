@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% from "_macros.html" import news_row, where %}
+{% block title %}{{ p.title }} | {{ brand.name }}{% endblock %}
+{% block desc %}{{ p.summary }}{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div class="wrap">
+    <div class="crumbs"><a href="{{ url_for('news_list') }}">News</a> / {{ n.type }}</div>
+    <h1 style="max-width:22em">{{ p.title }}</h1>
+    <p>{{ p.summary }}</p>
+    <div class="news-meta" style="margin-top:14px">{{ fmt_date(p.date, true) }}{% if n.source %} &middot; {{ n.source }}{% endif %}</div>
+  </div>
+</section>
+<div class="wrap">
+  {% if p.status != 'published' %}<div class="callout" style="margin-top:24px"><b>Draft.</b> Only signed-in admins can see this article. <a href="{{ url_for('admin_edit', section='news', post_id=p.id) }}">Edit it</a>.</div>{% endif %}
+  <div class="article-layout">
+    <article class="prose">
+      {% if p.cover %}<figure class="img-fig"><img src="{{ p.cover }}" alt=""></figure>{% endif %}
+      {{ body }}
+      {% if is_admin() %}<p class="small" style="font-family:var(--sans)"><a href="{{ url_for('admin_edit', section='news', post_id=p.id) }}">Edit this article</a></p>{% endif %}
+    </article>
+    <aside>
+      {% if n.company or n.country or n.subsector or n.vertical %}
+      <div class="side-box">
+        <h3 style="font-size:1.1rem">Behind the story</h3>
+        <ul class="plain">
+          {% if n.company %}<li><a href="{{ url_for('company', slug=n.company) }}">{{ companies_all[n.company].name }}</a><span class="muted small"> Company profile</span></li>{% endif %}
+          {% if n.country %}<li><a href="{{ url_for('dashboard', country=n.country, view='subsector') }}">{{ COUNTRY[n.country].name }}</a><span class="muted small"> Market overview</span></li>{% endif %}
+          {% if n.country and n.subsector %}<li><a href="{{ url_for('dashboard', country=n.country, subsector=n.subsector, view='vertical') }}">{{ SUB[n.subsector].name }} in {{ COUNTRY[n.country].name }}</a></li>
+          {% elif n.subsector %}<li><a href="{{ url_for('dashboard', subsector=n.subsector, view='country') }}">{{ SUB[n.subsector].name }}</a><span class="muted small"> Market overview</span></li>{% endif %}
+          {% if n.vertical %}<li><a href="{{ url_for('dashboard', vertical=n.vertical, view='country') }}">{{ VERT[n.vertical].name }}</a><span class="muted small"> Market overview</span></li>{% endif %}
+        </ul>
+      </div>
+      {% endif %}
+    </aside>
+  </div>
+  {% if related %}
+  <section style="padding-bottom:72px">
+    <h3>More news</h3>
+    <div class="feed" style="margin-top:8px">{% for r in related %}{{ news_row(r) }}{% endfor %}</div>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

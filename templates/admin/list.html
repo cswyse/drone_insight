@@ -1,0 +1,28 @@
+{% extends "admin/base.html" %}
+{% from "_macros.html" import pager %}
+{% block admin %}
+<div class="adm-title"><h1>{{ label }}</h1><a class="btn small" href="{{ url_for('admin_new', section=section) }}">New {{ singular }}</a></div>
+<form class="toolbar" method="get" style="padding-top:4px"><input type="search" name="q" value="{{ q }}" placeholder="Search by title" aria-label="Search by title"><button class="btn navy small" type="submit">Search</button><span class="muted small">{{ total }} item{{ '' if total == 1 else 's' }}</span></form>
+<div class="table-scroll">
+<table class="data">
+  <thead><tr><th>Title</th><th>Date</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+  {% for p in items %}
+    <tr>
+      <td class="name"><a href="{{ url_for('admin_edit', section=section, post_id=p.id) }}">{{ p.title }}</a>{% if section == 'news' and p.meta.type %}<div class="small muted">{{ p.meta.type }}</div>{% endif %}</td>
+      <td>{{ fmt_date(p.date) }}</td>
+      <td><span class="status-pill {{ 'draft' if p.status != 'published' }}">{{ 'Published' if p.status == 'published' else 'Draft' }}</span></td>
+      <td style="white-space:nowrap">
+        <a href="{{ url_for('news_article' if section == 'news' else 'whitepaper' if section == 'papers' else 'report', slug=p.slug) }}">View</a> &nbsp;
+        <a href="{{ url_for('admin_edit', section=section, post_id=p.id) }}">Edit</a> &nbsp;
+        <form class="inline-form" method="post" action="{{ url_for('admin_toggle', section=section, post_id=p.id) }}"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="link-btn" type="submit">{{ 'Unpublish' if p.status == 'published' else 'Publish' }}</button></form> &nbsp;
+        <form class="inline-form" method="post" action="{{ url_for('admin_delete', section=section, post_id=p.id) }}" onsubmit="return confirm('Delete this item permanently?')"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="link-btn danger" type="submit">Delete</button></form>
+      </td>
+    </tr>
+  {% else %}<tr><td colspan="4"><div class="empty">Nothing here yet. Create your first {{ singular }}.</div></td></tr>{% endfor %}
+  </tbody>
+</table>
+</div>
+{{ pager(page, pages, 'admin_list', {'section': section, 'q': q or None}) }}
+<div style="height:60px"></div>
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% from "_macros.html" import fld, flashes %}
+{% block title %}Contact | {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="page-head"><div class="wrap"><h1>Contact us</h1><p>Questions, feedback or a request for something specific. We reply by email.</p></div></section>
+<div class="wrap" style="padding:26px 28px 80px"><div class="narrow" id="sent">
+  {{ flashes() }}
+  {% if errors.form %}<div class="flash error" role="alert">{{ errors.form }}</div>{% endif %}
+  <form method="post" class="form-grid" novalidate>
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <div class="hp" aria-hidden="true"><label>Leave this empty<input name="website" tabindex="-1" autocomplete="off"></label></div>
+    {{ fld('name', 'Name', form, errors, ac='name', req=True) }}
+    {{ fld('email', 'Email', form, errors, type='email', ac='email', req=True) }}
+    {{ fld('company', 'Company (optional)', form, errors, ac='organization') }}
+    {{ fld('subject', 'Subject', form, errors, req=True) }}
+    <div class="field"><label for="message">Message</label><textarea id="message" name="message" rows="7" required>{{ form.message or '' }}</textarea>{% if errors.message %}<div class="err">{{ errors.message }}</div>{% endif %}</div>
+    <div><button class="btn" type="submit">Send message</button></div>
+    <p class="small muted" style="margin:0">We use your details only to reply. See the <a href="{{ url_for('privacy') }}">Privacy Policy</a>.</p>
+  </form>
+</div></div>
+{% endblock %}

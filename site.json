@@ -1,0 +1,55 @@
+{
+  "brand": {
+    "name": "Meridian",
+    "product": "Market Intelligence",
+    "tagline": "See the whole market. Decide with confidence.",
+    "lead": "Market size, company moves and independent research in one place. Start with a country and follow the market down to a single company's financials.",
+    "logo": "",
+    "logo_dark": "",
+    "favicon": "",
+    "logo_height": 30
+  },
+  "theme": {
+    "primary": "#051C2C",
+    "accent": "#2251FF",
+    "highlight": "#00A9F4",
+    "ink": "#1B2733",
+    "muted": "#566677",
+    "line": "#D8DEE5",
+    "soft": "#F3F5F8",
+    "background": "#FFFFFF",
+    "positive": "#0B7A4B",
+    "negative": "#B3261E",
+    "heading_font": "Georgia, 'Times New Roman', Times, serif",
+    "body_font": "'Helvetica Neue', Helvetica, Arial, 'Segoe UI', sans-serif",
+    "google_fonts_url": "",
+    "heading_weight": "400",
+    "radius": "0px",
+    "max_width": "1200px"
+  },
+  "charts": {
+    "series": [
+      "#2a78d6",
+      "#eb6834",
+      "#1baf7a",
+      "#eda100",
+      "#e87ba4"
+    ]
+  },
+  "pagination": {
+    "news": 10,
+    "papers": 6,
+    "reports": 6
+  },
+  "contact": {
+    "email": ""
+  },
+  "pricing": {
+    "subscriber_price": "Contact us for pricing",
+    "subscriber_note": "Invoiced by arrangement. Access is switched on by our team."
+  },
+  "legal": {
+    "version": "1.0",
+    "updated": "2026-11-16"
+  }
+}

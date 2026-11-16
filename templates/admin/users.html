@@ -1,0 +1,22 @@
+{% extends "admin/base.html" %}
+{% from "_macros.html" import pager %}
+{% block admin %}
+<div class="adm-title"><h1>Users</h1>
+  <span><a class="btn small" href="{{ url_for('admin_users_csv', list='mailing') }}">Download mailing list (CSV)</a>
+  <a class="btn small outline" href="{{ url_for('admin_users_csv', list='all') }}">Download all users</a></span></div>
+<form class="toolbar" method="get"><input type="search" name="q" value="{{ q }}" placeholder="Search name, email or company" aria-label="Search users">
+  <select name="show" aria-label="Filter" onchange="this.form.submit()"><option value="">All users</option><option value="subscribers" {{ 'selected' if show == 'subscribers' }}>Subscribers</option><option value="free" {{ 'selected' if show == 'free' }}>Free</option><option value="mailing" {{ 'selected' if show == 'mailing' }}>On mailing list</option></select>
+  <button class="btn small outline" type="submit">Search</button></form>
+<p class="muted small">{{ total }} user{{ '' if total == 1 else 's' }}. The mailing list download includes only active users who opted in.</p>
+<div class="table-scroll"><table class="data">
+  <thead><tr><th>Name</th><th>Plan</th><th>Mailing list</th><th>Joined</th><th>Last sign-in</th><th></th></tr></thead>
+  <tbody>{% for u in users %}
+    <tr><td style="text-align:left"><b>{{ u.name }}</b>{% if not u.active %} <span class="tag">Disabled</span>{% endif %}<div class="small muted">{{ u.email }}{% if u.company %} &middot; {{ u.company }}{% endif %}</div></td>
+      <td>{{ 'Subscriber' if u.eff == 'subscriber' else 'Free' }}{% if u.tier == 'subscriber' and u.eff == 'free' %}<div class="small muted">expired</div>{% elif u.subscription_until %}<div class="small muted">to {{ fmt_date(u.subscription_until) }}</div>{% endif %}</td>
+      <td>{{ 'Yes' if u.mailing_opt_in else 'No' }}</td><td>{{ fmt_date(u.created) }}</td><td>{{ fmt_date(u.last_login) if u.last_login else 'Never' }}</td>
+      <td><a href="{{ url_for('admin_user', uid=u.id) }}">Manage</a></td></tr>
+  {% else %}<tr><td colspan="6"><div class="empty">No users match.</div></td></tr>{% endfor %}</tbody>
+</table></div>
+{{ pager(page, pages, 'admin_users', params) }}
+<div style="height:60px"></div>
+{% endblock %}

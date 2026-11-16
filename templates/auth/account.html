@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "_macros.html" import fld, flashes %}
+{% block title %}Your account | {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="page-head"><div class="wrap"><h1>Your account</h1><p>{{ user.email }}</p></div></section>
+<div class="wrap" style="padding:26px 28px 80px">
+  {{ flashes() }}
+  <div class="acct-grid">
+    <div>
+      <h3>Plan</h3>
+      <div class="side-box" style="position:static;margin-bottom:28px">
+        {% if tier == 'subscriber' %}<p style="margin-top:0"><b>Subscriber</b>{% if user.subscription_until %} until {{ fmt_date(user.subscription_until, true) }}{% endif %}</p>
+          <p class="muted">Dashboard, company profiles, all reports and white papers.</p>
+          <a class="btn small" href="{{ url_for('dashboard') }}">Open the dashboard</a>
+        {% else %}<p style="margin-top:0"><b>Free</b>{% if user.tier == 'subscriber' %} (your subscription ended {{ fmt_date(user.subscription_until, true) }}){% endif %}</p>
+          <p class="muted">White papers and news. Subscribe to unlock the dashboard and every report.</p>
+          <a class="btn small" href="{{ url_for('pricing') }}">See plans</a>{% endif %}
+      </div>
+      <h3>Details</h3>
+      <form method="post" class="form-grid" novalidate>
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        {{ fld('name', 'Full name', {'name': user.name}, errors, ac='name', req=True) }}
+        {{ fld('company', 'Company', {'company': user.company}, errors, ac='organization') }}
+        <label class="checkrow"><input type="checkbox" name="mailing" value="1" {{ 'checked' if user.mailing_opt_in }}><span>Send me research updates and news by email.</span></label>
+        <div><button class="btn" type="submit">Save changes</button></div>
+      </form>
+    </div>
+    <div>
+      <h3>Security</h3>
+      <p><a class="btn outline small" href="{{ url_for('account_password') }}">Change password</a></p>
+      <form method="post" action="{{ url_for('logout') }}" style="margin:14px 0 36px"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn outline small" type="submit">Sign out</button></form>
+      <h3>Delete account</h3>
+      <p class="muted">This removes your account and personal details for good.</p>
+      <form method="post" action="{{ url_for('account_delete') }}" class="form-grid" onsubmit="return confirm('Delete your account for good?')">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <div class="field"><label for="dpw">Confirm with your password</label><input id="dpw" name="password" type="password" autocomplete="current-password" required></div>
+        <div><button class="btn outline small" type="submit">Delete my account</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} | {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="page-head"><div class="wrap"><h1>{{ title }}</h1><p>Version {{ legal.version }}, last updated {{ fmt_date(legal.updated, true) }}.</p></div></section>
+<div class="wrap" style="padding:30px 28px 80px"><article class="prose">{{ body }}</article></div>
+{% endblock %}

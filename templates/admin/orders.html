@@ -1,0 +1,12 @@
+{% extends "admin/base.html" %}
+{% block admin %}
+<div class="adm-title"><h1>Report orders</h1></div>
+<div class="table-scroll"><table class="data">
+  <thead><tr><th>Reference</th><th>Report</th><th>Licence</th><th>Amount</th><th>Customer</th><th>Placed</th><th>Status</th></tr></thead>
+  <tbody>{% for o in orders %}
+    <tr><td class="name">{{ o.id }}</td><td style="text-align:left">{{ o.title }}</td><td>{{ o.licence }}</td><td>{{ money(o.amount) }}</td>
+      <td style="text-align:left">{{ o.name }}<div class="small muted">{{ o.email }} &middot; {{ o.company }}</div></td><td>{{ fmt_date(o.created) }}</td><td>{{ o.status|replace('-', ' ')|capitalize }}</td></tr>
+  {% else %}<tr><td colspan="7"><div class="empty">No orders yet. Orders appear here when someone buys a report.</div></td></tr>{% endfor %}</tbody>
+</table></div>
+<div style="height:60px"></div>
+{% endblock %}

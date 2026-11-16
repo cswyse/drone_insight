@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% from "_macros.html" import fld %}
+{% block title %}Create an account | {{ brand.name }}{% endblock %}
+{% block content %}
+<div class="auth-box">
+  <h1 style="font-size:2rem">Create a free account</h1>
+  <p class="muted">Read every white paper. Subscribers also get the dashboard and all reports.</p>
+  {% if errors.form %}<div class="flash error" role="alert">{{ errors.form }}</div>{% endif %}
+  <form method="post" class="form-grid" novalidate>
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="next" value="{{ next }}">
+    <div class="hp" aria-hidden="true"><label>Leave this empty<input name="website" tabindex="-1" autocomplete="off"></label></div>
+    {{ fld('name', 'Full name', form, errors, ac='name', req=True) }}
+    {{ fld('email', 'Work email', form, errors, type='email', ac='email', req=True) }}
+    {{ fld('company', 'Company (optional)', form, errors, ac='organization') }}
+    {{ fld('password', 'Password', form, errors, type='password', ac='new-password', req=True, hint='At least 10 characters.') }}
+    <div>
+      <label class="checkrow"><input type="checkbox" name="terms" value="1" {{ 'checked' if request.method == 'POST' and request.form.get('terms') }}>
+        <span>I agree to the <a href="{{ url_for('terms') }}" target="_blank" rel="noopener">Terms and Conditions</a> and have read the <a href="{{ url_for('privacy') }}" target="_blank" rel="noopener">Privacy Policy</a>.</span></label>
+      {% if errors.terms %}<div class="err">{{ errors.terms }}</div>{% endif %}
+    </div>
+    <label class="checkrow"><input type="checkbox" name="mailing" value="1" {{ 'checked' if form.mailing }}>
+      <span>Add me to the mailing list for research updates and news. Optional, and you can change it any time in your account.</span></label>
+    <button class="btn" type="submit">Create account</button>
+  </form>
+  <p class="small muted" style="margin-top:18px">Already have an account? <a href="{{ url_for('login', next=next) }}">Sign in</a></p>
+</div>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "admin/base.html" %}
+{% block admin %}
+<div class="adm-title"><h1>Admin</h1></div>
+{% if default_pw %}<div class="flash error"><b>Change the admin password.</b> You are using the default password. Set the <code>ADMIN_PASSWORD</code> environment variable before you put this site online.</div>{% endif %}
+<div class="admin-cards">
+  {% for sec, label in (('news','News'),('papers','White papers'),('reports','Reports')) %}
+  <a class="admin-card" href="{{ url_for('admin_list', section=sec) }}" style="text-decoration:none"><b>{{ counts[sec] }}</b><span class="muted">{{ label }}{% if drafts[sec] %} &middot; {{ drafts[sec] }} draft{{ '' if drafts[sec] == 1 else 's' }}{% endif %}</span></a>
+  {% endfor %}
+  <a class="admin-card" href="{{ url_for('admin_users') }}" style="text-decoration:none"><b>{{ stats.users }}</b><span class="muted">Users &middot; {{ stats.subscribers }} subscriber{{ '' if stats.subscribers == 1 else 's' }}</span></a>
+  <a class="admin-card" href="{{ url_for('admin_users', show='mailing') }}" style="text-decoration:none"><b>{{ stats.mailing }}</b><span class="muted">On the mailing list</span></a>
+  <a class="admin-card" href="{{ url_for('admin_messages') }}" style="text-decoration:none"><b>{{ stats.new_messages }}</b><span class="muted">New messages</span></a>
+  <a class="admin-card" href="{{ url_for('admin_orders') }}" style="text-decoration:none"><b>{{ orders }}</b><span class="muted">Report orders</span></a>
+</div>
+<div class="three-col" style="margin:36px 0 70px">
+  <div><h3>Publish something</h3>
+    <p><a class="btn small" href="{{ url_for('admin_new', section='news') }}">New news article</a></p>
+    <p><a class="btn small outline" href="{{ url_for('admin_new', section='papers') }}">New white paper</a></p>
+    <p><a class="btn small outline" href="{{ url_for('admin_new', section='reports') }}">New report</a></p></div>
+  <div><h3>Change the look</h3><p class="muted">Site name, logo, colours, fonts and corner style apply everywhere, including charts and the hero globe.</p><p><a class="btn small outline" href="{{ url_for('admin_settings') }}">Open settings</a></p></div>
+  <div><h3>Link news to the dashboard</h3><p class="muted">When you tag a news article with a company, country, sub-sector or vertical, it appears in the matching dashboard panels automatically.</p></div>
+</div>
+{% endblock %}

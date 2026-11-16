@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pager, thumb %}
+{% block title %}White papers | {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div class="wrap">
+    <h1>White papers</h1>
+    <p>Long-form analysis of the trends, risks and strategic choices shaping the market. Free to read, print or save as PDF.</p>
+  </div>
+</section>
+<div class="wrap" style="padding:24px 28px 72px">
+  <div class="filter-links" aria-label="Topics">
+    <a href="{{ url_for('whitepapers') }}" class="{{ 'on' if not tag }}">All topics</a>
+    {% for t in tags %}<a href="{{ url_for('whitepapers', tag=t) }}" class="{{ 'on' if tag == t }}">{{ t }}</a>{% endfor %}
+  </div>
+  <div class="grid-2">
+    {% for p in papers %}
+    <a class="paper-card" href="{{ url_for('whitepaper', slug=p.slug) }}">
+      {{ thumb(p.cover) }}
+      <div class="small muted">{{ fmt_date(p.date) }}{% if p.author %} &middot; {{ p.author }}{% endif %}</div>
+      <h3 style="margin:8px 0">{{ p.title }}</h3>
+      <p>{{ p.summary }}</p>
+      <div>{% for t in p.tags %}<span class="tag gray">{{ t }}</span>{% endfor %}</div>
+    </a>
+    {% else %}<div class="empty">No white papers in this topic yet.</div>{% endfor %}
+  </div>
+  {{ pager(page, pages, 'whitepapers', params) }}
+</div>
+{% endblock %}

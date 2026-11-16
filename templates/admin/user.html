@@ -1,0 +1,28 @@
+{% extends "admin/base.html" %}
+{% block admin %}
+<div class="adm-title"><h1>{{ u.name }}</h1><a class="btn small outline" href="{{ url_for('admin_users') }}">Back to users</a></div>
+<p class="muted">{{ u.email }} &middot; joined {{ fmt_date(u.created, true) }} &middot; mailing list: {{ 'yes, since ' ~ fmt_date(u.mailing_opt_in_at) if u.mailing_opt_in else 'no' }} &middot; accepted terms v{{ u.terms_version }} on {{ fmt_date(u.terms_accepted_at) }}</p>
+<form method="post" class="adm-form">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <fieldset><legend>Account</legend>
+    <div class="row"><div class="field"><label for="name">Name</label><input id="name" name="name" value="{{ u.name }}" required></div>
+    <div class="field"><label for="company">Company</label><input id="company" name="company" value="{{ u.company }}"></div></div>
+  </fieldset>
+  <fieldset><legend>Plan</legend>
+    <div class="row">
+      <div class="field"><label for="tier">Tier</label><select id="tier" name="tier"><option value="free" {{ 'selected' if u.tier != 'subscriber' }}>Free</option><option value="subscriber" {{ 'selected' if u.tier == 'subscriber' }}>Subscriber</option></select>
+        <span class="hint">Currently: {{ 'Subscriber' if eff == 'subscriber' else 'Free' }}.</span></div>
+      <div class="field"><label for="subscription_until">Subscription ends (optional)</label><input id="subscription_until" name="subscription_until" value="{{ request.form.get('subscription_until', u.subscription_until) }}" placeholder="YYYY-MM-DD">
+        <span class="hint">Leave empty for no end date. After this day they drop to Free automatically.</span>{% if errors.subscription_until %}<div class="err">{{ errors.subscription_until }}</div>{% endif %}</div>
+    </div>
+    <label class="checkrow" style="margin-top:14px"><input type="checkbox" name="active" value="1" {{ 'checked' if u.active }}><span>Account is active. Untick to block sign-in without deleting the account.</span></label>
+  </fieldset>
+  <fieldset><legend>Password reset</legend>
+    <div class="field"><label for="temp_password">Set a temporary password</label><input id="temp_password" name="temp_password" type="text" autocomplete="off"><span class="hint">Optional. Send it to the user yourself. They must choose a new one when they sign in.</span>{% if errors.temp_password %}<div class="err">{{ errors.temp_password }}</div>{% endif %}</div>
+  </fieldset>
+  <fieldset><legend>Notes (only you see these)</legend><textarea name="notes" rows="3">{{ u.notes }}</textarea></fieldset>
+  <div style="display:flex;gap:12px;flex-wrap:wrap"><button class="btn" type="submit">Save</button></div>
+</form>
+{% if msgs %}<h3 style="margin-top:34px">Messages from this user</h3><ul>{% for m in msgs %}<li>{{ fmt_date(m.created) }}: {{ m.subject or m.topic }}</li>{% endfor %}</ul>{% endif %}
+<form method="post" action="{{ url_for('admin_user_delete', uid=u.id) }}" style="margin:34px 0 70px" onsubmit="return confirm('Delete this user for good?')"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn small outline" type="submit">Delete user</button></form>
+{% endblock %}

@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}{{ r.title }} | {{ brand.name }}{% endblock %}
+{% block desc %}{{ r.summary }}{% endblock %}
+{% block content %}
+<section class="page-head dark">
+  <div class="wrap">
+    <div class="crumbs"><a href="{{ url_for('reports') }}">Reports</a> / {{ r.meta.category }}</div>
+    <h1 style="max-width:18em">{{ r.title }}</h1>
+    <p>{{ r.meta.subtitle or r.summary }}</p>
+  </div>
+</section>
+<div class="wrap">
+  {% if r.status != 'published' %}<div class="callout" style="margin-top:24px"><b>Draft.</b> Only signed-in admins can see this. <a href="{{ url_for('admin_edit', section='reports', post_id=r.id) }}">Edit it</a>.</div>{% endif %}
+  <div class="article-layout">
+    <div>
+      {% if r.cover %}<img class="cover-img" src="{{ r.cover }}" alt="" style="margin-bottom:22px">{% endif %}
+      <dl class="dl" style="margin:0 0 28px">
+        <dt>Published</dt><dd>{{ fmt_date(r.date, true) }}</dd>
+        {% if r.meta.pages %}<dt>Length</dt><dd>{{ r.meta.pages }} pages</dd>{% endif %}
+        {% if r.meta.coverage %}<dt>Coverage</dt><dd>{{ r.meta.coverage }}</dd>{% endif %}
+      </dl>
+      <div class="prose" style="max-width:none">{{ body }}</div>
+      {% if r.meta.highlights %}<h3 style="margin-top:30px">What is inside</h3>
+      <ul style="padding-left:20px;margin-bottom:30px">{% for h in r.meta.highlights %}<li style="margin-bottom:6px">{{ h }}</li>{% endfor %}</ul>{% endif %}
+      {% if r.meta.toc %}<h3>Contents</h3>
+      <ol class="toc">{% for t in r.meta.toc %}<li>{{ t }}</li>{% endfor %}</ol>{% endif %}
+      {% if is_admin() %}<p class="small" style="margin-top:20px"><a href="{{ url_for('admin_edit', section='reports', post_id=r.id) }}">Edit this report</a></p>{% endif %}
+    </div>
+    <aside>
+      {% if is_subscriber %}
+      <div class="side-box">
+        <h3 style="font-size:1.2rem">Included in your subscription</h3>
+        {% if r.meta.file %}<p class="muted">Download the full report as a PDF.</p><a class="btn" href="{{ url_for('report_download', slug=r.slug) }}">Download PDF</a>
+        {% else %}<p class="muted">The full report file has not been added yet. <a href="{{ url_for('contact', subject='Report file: ' ~ r.title) }}">Ask us for a copy</a>.</p>{% endif %}
+      </div>
+      {% else %}
+      <div class="side-box">
+        <h3 style="font-size:1.2rem">Free with a subscription</h3>
+        <p class="muted">Subscribers get every report, plus the market dashboard.</p>
+        <a class="btn" href="{{ url_for('pricing') }}">See plans</a>
+      </div>
+      <form class="side-box" style="margin-top:18px;position:static" method="post" action="{{ url_for('report', slug=r.slug) }}" novalidate>
+        <h3 style="font-size:1.2rem">Or buy this report on its own</h3>
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <div class="form-grid">
+          <fieldset style="border:0;padding:0;margin:0;display:grid;gap:8px">
+            <legend class="small" style="font-weight:600;padding:0 0 6px">Licence</legend>
+            {% for l in licences %}
+            <label class="radio"><input type="radio" name="licence" value="{{ l.id }}" {{ 'checked' if form.licence == l.id }}>
+              <span><b>{{ l.name }} &middot; {{ money(price * l.multiplier) }}</b><span class="small muted">{{ l.note }}</span></span></label>
+            {% endfor %}
+            {% if errors.licence %}<div class="err">{{ errors.licence }}</div>{% endif %}
+          </fieldset>
+          <div class="field"><label for="name">Full name</label><input id="name" name="name" type="text" value="{{ form.name or '' }}" autocomplete="name" required>{% if errors.name %}<div class="err">{{ errors.name }}</div>{% endif %}</div>
+          <div class="field"><label for="email">Work email</label><input id="email" name="email" type="email" value="{{ form.email or '' }}" autocomplete="email" required>{% if errors.email %}<div class="err">{{ errors.email }}</div>{% endif %}</div>
+          <div class="field"><label for="company">Company</label><input id="company" name="company" type="text" value="{{ form.company or '' }}" autocomplete="organization" required>{% if errors.company %}<div class="err">{{ errors.company }}</div>{% endif %}</div>
+          <button class="btn" type="submit">Place order</button>
+          <p class="small muted" style="margin:0">We record your order and contact you to arrange payment. Access is then switched on by our team.</p>
+        </div>
+      </form>
+      {% endif %}
+    </aside>
+  </div>
+  {% if related %}
+  <section style="padding-bottom:72px">
+    <h3>Related reports</h3>
+    <div class="grid-3" style="margin-top:18px">
+      {% for m in related %}<a class="report-card" href="{{ url_for('report', slug=m.slug) }}"><div class="small muted">{{ m.meta.category }}</div><h4 style="margin:6px 0">{{ m.title }}</h4><p>{{ m.meta.subtitle or m.summary }}</p><div class="price">From {{ money(m.meta.price) }}</div></a>{% endfor %}
+    </div>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

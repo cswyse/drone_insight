@@ -1,0 +1,52 @@
+{% macro logo(dark=False) -%}
+  {%- set img = (brand.logo_dark if dark else brand.logo) -%}
+  {%- if img -%}<img src="{{ img }}" alt="{{ brand.name }}" style="height:{{ brand.logo_height }}px">
+  {%- else -%}<b class="wordmark">{{ brand.name }}</b>{%- endif -%}
+{%- endmacro %}
+
+{% macro flag(cid) -%}
+  {%- if cid in COUNTRY %}<img class="flag" src="{{ url_for('static', filename='flags/' ~ FLAG_CODE.get(cid, cid) ~ '.svg') }}" alt="" width="20" height="15" loading="lazy" onerror="this.remove()">{% endif -%}
+{%- endmacro %}
+
+{% macro thumb(url) -%}{% if url %}<img class="thumb" src="{{ url }}" alt="" loading="lazy">{% endif %}{%- endmacro %}
+
+{% macro where(n) -%}
+  {%- if n.company %}{{ companies_all[n.company].name }}{% endif -%}
+  {%- if n.company and n.country %} &middot; {% endif -%}
+  {%- if n.country %}{{ flag(n.country) }}{{ COUNTRY[n.country].name }}{% endif -%}
+{%- endmacro %}
+
+{# Summary row used on the home page and the News page #}
+{% macro news_row(n) %}
+<article class="news-row">
+  {{ thumb(n.cover) }}
+  <div class="news-meta">{{ fmt_date(n.date) }} &middot; {{ n.type }}{% if n.company or n.country %} &middot; {{ where(n) }}{% endif %}</div>
+  <h3><a href="{{ url_for('news_article', slug=n.slug) }}">{{ n.headline }}</a></h3>
+  <p>{{ n.summary }}</p>
+</article>
+{% endmacro %}
+
+{# Compact row for dashboard and company panels: headline and meta only #}
+{% macro news_compact(n) %}
+<article class="news-compact">
+  <div class="news-meta">{{ fmt_date(n.date) }} &middot; {{ n.type }}{% if n.broader %} &middot; Wider context{% endif %}</div>
+  <a href="{{ url_for('news_article', slug=n.slug) }}">{{ n.headline }}</a>
+  {% if n.company or n.country %}<div class="news-meta">{{ where(n) }}</div>{% endif %}
+</article>
+{% endmacro %}
+
+{# Minimal pagination: Previous, Page X of Y, Next #}
+{% macro pager(page, pages, endpoint, params) %}
+{% if pages > 1 %}
+<nav class="pager-min" aria-label="Pagination">
+  {% if page > 1 %}<a rel="prev" href="{{ url_for(endpoint, page=(page - 1 if page > 2 else None), **params) }}">Previous</a>{% else %}<span class="off">Previous</span>{% endif %}
+  <span class="where">Page {{ page }} of {{ pages }}</span>
+  {% if page < pages %}<a rel="next" href="{{ url_for(endpoint, page=page + 1, **params) }}">Next</a>{% else %}<span class="off">Next</span>{% endif %}
+</nav>
+{% endif %}
+{% endmacro %}
+
+{% macro cagr_cell(v) %}<span class="{{ 'pos' if v and v > 0.08 else '' }}">{{ fmt_pct(v) }}</span>{% endmacro %}
+
+{% macro flashes() %}{% with msgs = get_flashed_messages(with_categories=true) %}{% for cat, m in msgs %}<div class="flash {{ cat }}" role="status">{{ m }}</div>{% endfor %}{% endwith %}{% endmacro %}
+{% macro fld(name, label, form, errors, type='text', ac='', req=False, hint='') %}<div class="field"><label for="{{ name }}">{{ label }}</label><input id="{{ name }}" name="{{ name }}" type="{{ type }}" value="{{ form.get(name, '') if type != 'password' else '' }}"{% if ac %} autocomplete="{{ ac }}"{% endif %}{% if req %} required{% endif %}>{% if hint %}<span class="hint">{{ hint }}</span>{% endif %}{% if errors.get(name) %}<div class="err">{{ errors[name] }}</div>{% endif %}</div>{% endmacro %}

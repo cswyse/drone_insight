@@ -1,0 +1,111 @@
+{% extends "admin/base.html" %}
+{% block admin %}
+<div class="adm-title"><h1>Site settings</h1></div>
+<p class="muted" style="max-width:46em;margin-bottom:22px">Everything here applies across the whole site: header, footer, every page, the charts and the hero globe. Settings are stored in <code>site.json</code>, so you can also edit them by hand.</p>
+<form method="post" enctype="multipart/form-data" class="adm-form" id="settings-form">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+
+  <fieldset><legend>Enquiries and pricing</legend>
+    <div class="field"><label for="contact_email">Send enquiries to</label><input id="contact_email" name="contact_email" type="email" value="{{ s.contact.email }}" placeholder="you@example.com"><span class="hint">Contact and pricing form messages are emailed here. They are always saved in Messages too. Sending needs the SMTP settings described in the README.</span></div>
+    <div class="row" style="margin-top:14px">
+      <div class="field"><label for="pricing_subscriber_price">Subscription price text</label><input id="pricing_subscriber_price" name="pricing_subscriber_price" type="text" value="{{ s.pricing.subscriber_price }}" placeholder="e.g. US$4,900 a year"></div>
+      <div class="field"><label for="pricing_subscriber_note">Price note</label><input id="pricing_subscriber_note" name="pricing_subscriber_note" type="text" value="{{ s.pricing.subscriber_note }}"></div>
+    </div>
+  </fieldset>
+
+  <fieldset><legend>Brand</legend>
+    <div class="row">
+      <div class="field"><label for="name">Site name</label><input id="name" name="name" type="text" value="{{ s.brand.name }}" required></div>
+      <div class="field"><label for="product">Product label</label><input id="product" name="product" type="text" value="{{ s.brand.product }}"><span class="hint">Shown next to the name in the header.</span></div>
+    </div>
+    <div class="field" style="margin-top:14px"><label for="tagline">Tagline</label><input id="tagline" name="tagline" type="text" value="{{ s.brand.tagline }}"><span class="hint">The headline on the home page.</span></div>
+    <div class="field" style="margin-top:14px"><label for="lead">Home page intro</label><textarea id="lead" name="lead" rows="3">{{ s.brand.lead }}</textarea></div>
+    <div class="row" style="margin-top:18px">
+      <div class="field"><label for="logo">Logo</label>
+        {% if s.brand.logo %}<img class="logo-preview" src="{{ s.brand.logo }}" alt="Current logo">{% endif %}
+        <input id="logo" name="logo" type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml">
+        <span class="hint">Shown in the header on a light background. PNG, JPG, WEBP or SVG. Without a logo, the site name is used as text.</span>
+        {% if s.brand.logo %}<label class="hint"><input type="checkbox" name="remove_logo" value="1"> Remove logo</label>{% endif %}</div>
+      <div class="field"><label for="logo_dark">Logo for dark backgrounds</label>
+        {% if s.brand.logo_dark %}<img class="logo-preview dark" src="{{ s.brand.logo_dark }}" alt="Current dark logo">{% endif %}
+        <input id="logo_dark" name="logo_dark" type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml">
+        <span class="hint">Used in the footer. Optional: the site name is used if empty.</span>
+        {% if s.brand.logo_dark %}<label class="hint"><input type="checkbox" name="remove_logo_dark" value="1"> Remove</label>{% endif %}</div>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <div class="field"><label for="favicon">Browser icon (favicon)</label>
+        {% if s.brand.favicon %}<img class="logo-preview" src="{{ s.brand.favicon }}" alt="Current favicon" style="max-height:32px">{% endif %}
+        <input id="favicon" name="favicon" type="file" accept="image/png,image/x-icon,image/svg+xml,image/webp">
+        <span class="hint">Optional. A simple letter icon in your colours is used otherwise.</span>
+        {% if s.brand.favicon %}<label class="hint"><input type="checkbox" name="remove_favicon" value="1"> Remove</label>{% endif %}</div>
+      <div class="field"><label for="logo_height">Logo height (px)</label><input id="logo_height" name="logo_height" type="number" min="16" max="80" value="{{ s.brand.logo_height }}"></div>
+    </div>
+  </fieldset>
+
+  <fieldset><legend>Colours</legend>
+    <p class="hint" style="margin-top:0">Start from a preset, then adjust. Text on dark colours switches between white and black automatically.</p>
+    <div class="presets" style="margin-bottom:18px">
+      {% for pname, pv in presets.items() %}<button type="button" class="preset" data-preset='{{ pv|tojson }}'><i style="background:{{ pv.primary }}"></i><i style="background:{{ pv.accent }}"></i><i style="background:{{ pv.highlight }}"></i>{{ pname }}</button>{% endfor %}
+    </div>
+    <div class="swatch-grid">
+      {% for key, label in (('primary','Primary (headers)'),('accent','Accent (buttons)'),('highlight','Highlight (globe)'),('ink','Text'),('muted','Muted text'),('line','Borders'),('soft','Soft background'),('background','Page background'),('positive','Positive'),('negative','Negative')) %}
+      <div class="swatch"><label for="color_{{ key }}">{{ label }}</label>
+        <div class="pick"><input type="color" value="{{ s.theme[key] }}" data-for="color_{{ key }}" aria-label="{{ label }} picker"><input id="color_{{ key }}" name="color_{{ key }}" type="text" value="{{ s.theme[key] }}" maxlength="7" data-var="{{ key }}"></div></div>
+      {% endfor %}
+    </div>
+  </fieldset>
+
+  <fieldset><legend>Typography and shape</legend>
+    <div class="row">
+      <div class="field"><label for="heading_font">Heading font</label><input id="heading_font" name="heading_font" type="text" value="{{ s.theme.heading_font }}" data-var="serif"><span class="hint">A CSS font stack, for example <code>Georgia, serif</code> or <code>'Playfair Display', serif</code>.</span></div>
+      <div class="field"><label for="body_font">Body font</label><input id="body_font" name="body_font" type="text" value="{{ s.theme.body_font }}" data-var="sans"></div>
+    </div>
+    <div class="field" style="margin-top:14px"><label for="google_fonts_url">Google Fonts link (optional)</label><input id="google_fonts_url" name="google_fonts_url" type="text" value="{{ s.theme.google_fonts_url }}" placeholder="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap"><span class="hint">Paste the stylesheet link from fonts.google.com, then use that font's name above.</span></div>
+    <div class="row" style="margin-top:14px">
+      <div class="field"><label for="heading_weight">Heading weight</label><select id="heading_weight" name="heading_weight" data-var="heading-weight">{% for w, wl in (('300','Light'),('400','Regular'),('500','Medium'),('600','Semibold'),('700','Bold')) %}<option value="{{ w }}" {{ 'selected' if s.theme.heading_weight == w }}>{{ wl }}</option>{% endfor %}</select></div>
+      <div class="field"><label for="radius">Corner style</label><select id="radius" name="radius" data-var="radius">{% for r, rl in (('0px','Square'),('2px','Slightly rounded'),('4px','Soft'),('8px','Rounded'),('12px','Very rounded')) %}<option value="{{ r }}" {{ 'selected' if s.theme.radius == r }}>{{ rl }}</option>{% endfor %}</select></div>
+    </div>
+  </fieldset>
+
+  <fieldset><legend>Chart colours</legend>
+    <p class="hint" style="margin-top:0">Used when a chart compares several series. Single-series charts use the accent colour. Keep them clearly different from each other.</p>
+    <div class="swatch-grid">
+      {% for i in range(5) %}<div class="swatch"><label for="series_{{ i }}">Series {{ i + 1 }}</label><div class="pick"><input type="color" value="{{ s.charts.series[i] }}" data-for="series_{{ i }}" aria-label="Series {{ i + 1 }} picker"><input id="series_{{ i }}" name="series_{{ i }}" type="text" value="{{ s.charts.series[i] }}" maxlength="7"></div></div>{% endfor %}
+    </div>
+  </fieldset>
+
+  <fieldset><legend>Items per page</legend>
+    <div class="row3" style="display:grid;gap:16px;grid-template-columns:1fr 1fr 1fr">
+      <div class="field"><label for="per_news">News</label><input id="per_news" name="per_news" type="number" min="3" max="50" value="{{ s.pagination.news }}"></div>
+      <div class="field"><label for="per_papers">White papers</label><input id="per_papers" name="per_papers" type="number" min="3" max="50" value="{{ s.pagination.papers }}"></div>
+      <div class="field"><label for="per_reports">Reports</label><input id="per_reports" name="per_reports" type="number" min="3" max="50" value="{{ s.pagination.reports }}"></div>
+    </div>
+  </fieldset>
+
+  <fieldset><legend>Live preview</legend>
+    <div class="live" id="live">
+      <div class="live-hero"><b class="live-name">{{ s.brand.name }}</b><h3>A headline in your heading font</h3><p>Body text in your body font, on your primary colour.</p><span class="btn">Button</span></div>
+      <div class="live-body"><h3>Section heading</h3><p>Body text with a <a href="#" onclick="return false">link</a> and <span style="color:var(--muted)">muted text</span>.</p>
+        <div class="live-card"><b>Card</b><span class="live-bars"><i style="height:30%"></i><i style="height:50%"></i><i style="height:70%"></i><i style="height:90%"></i></span></div></div>
+    </div>
+  </fieldset>
+
+  <div><button class="btn" type="submit">Save settings</button></div>
+</form>
+<style>
+  .live { border: 1px solid var(--line); font-family: var(--sans); color: var(--ink); background: var(--background); }
+  .live h3 { font-family: var(--serif); font-weight: var(--heading-weight); margin: 0 0 8px; color: var(--primary); }
+  .live-hero { background: var(--primary); color: var(--on-primary); padding: 26px; }
+  .live-hero h3 { color: var(--on-primary); font-size: 1.5rem; }
+  .live-name { font-family: var(--serif); display: block; margin-bottom: 14px; }
+  .live-hero .btn { background: var(--accent); color: var(--on-accent); }
+  .live-body { padding: 22px 26px; }
+  .live-body a { color: var(--accent); }
+  .live-card { border: 1px solid var(--line); padding: 14px; display: flex; justify-content: space-between; align-items: flex-end; border-radius: var(--radius); background: var(--background); }
+  .live-hero .btn, .live-card { border-radius: var(--radius); }
+  .live-bars { display: flex; gap: 6px; align-items: flex-end; height: 44px; }
+  .live-bars i { width: 14px; background: var(--accent); display: block; }
+  .live-bars i:last-child { background: var(--highlight); }
+</style>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/admin.js') }}"></script>{% endblock %}

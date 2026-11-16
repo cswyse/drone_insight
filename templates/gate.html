@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Subscribers only | {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="page-head"><div class="wrap"><h1>This is for subscribers</h1>
+<p>The market dashboard, company profiles and every full report are included with a subscription.</p></div></section>
+<div class="wrap" style="padding:36px 28px 80px">
+  <div class="gate">
+    <div>
+      <h3>What you get</h3>
+      <ul class="check">
+        <li>Market size and news by country, sub-sector, vertical and company</li>
+        <li>Company profiles with financials and peers</li>
+        <li>Every market report, free to download</li>
+        <li>Everything in the free tier, including white papers</li>
+      </ul>
+      <p><a class="btn" href="{{ url_for('pricing') }}">See plans and request access</a></p>
+    </div>
+    <div class="side-box" style="position:static">
+      {% if user %}
+      <h3 style="font-size:1.2rem">You are signed in as a free member</h3>
+      <p class="muted">{{ user.email }}. Ask us to upgrade your account and access is switched on straight away.</p>
+      <p><a class="btn outline small" href="{{ url_for('pricing', topic='Subscription') }}">Request a subscription</a></p>
+      {% else %}
+      <h3 style="font-size:1.2rem">Already a subscriber?</h3>
+      <p><a class="btn" href="{{ url_for('login', next=next) }}">Sign in</a></p>
+      <p class="small muted" style="margin-bottom:0">New here? <a href="{{ url_for('signup', next=next) }}">Create a free account</a> to read white papers.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

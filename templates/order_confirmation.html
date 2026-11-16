@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Order received | {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="page-head"><div class="wrap"><h1>Order received</h1><p>Thank you, {{ o.name }}. Your order reference is <b>{{ o.id }}</b>.</p></div></section>
+<div class="wrap" style="padding:40px 28px 80px;max-width:760px;margin:0 auto">
+  <div class="card pad">
+    <dl class="dl">
+      <dt>Report</dt><dd><a href="{{ url_for('report', slug=o.report) }}">{{ o.title }}</a></dd>
+      <dt>Licence</dt><dd>{{ o.licence }}</dd>
+      <dt>Amount</dt><dd>{{ money(o.amount) }}</dd>
+      <dt>Company</dt><dd>{{ o.company }}</dd>
+      <dt>Email</dt><dd>{{ o.email }}</dd>
+      <dt>Status</dt><dd><span class="tag gray">Pending payment</span></dd>
+    </dl>
+  </div>
+  <p class="muted" style="margin-top:20px">This is a demo checkout, so no payment has been taken. In production, this step would send an invoice or payment link to {{ o.email }}.</p>
+  <a class="btn outline" href="{{ url_for('reports') }}">Back to reports</a>
+</div>
+{% endblock %}

@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% from "_macros.html" import news_compact, flag %}
+{% block title %}{{ co.name }} | {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="dash-head">
+  <div class="wrap">
+    <div class="crumbs"><a href="{{ url_for('dashboard') }}">Dashboard</a> / <a href="{{ back }}">Companies{% if f %} in selection{% endif %}</a> / {{ co.name }}</div>
+    <div class="co-head">
+      <div>
+        <h1 style="margin-bottom:6px">{{ co.name }}</h1>
+        <div class="co-meta">
+          <span>{{ flag(co.hq) }}{{ co.city }}, {{ COUNTRY[co.hq].name }}</span>
+          <span>{{ co.ownership }}{% if co.ticker %} &middot; {{ co.exchange }}: {{ co.ticker }}{% endif %}</span>
+          <span>Founded {{ co.founded }}</span>
+          <span>{{ SUB[co.primary].name }}</span>
+        </div>
+      </div>
+      <a class="btn ghost small" href="{{ back }}">Back to dashboard</a>
+    </div>
+  </div>
+</section>
+
+<div class="wrap" style="padding-bottom:64px">
+  <div class="kpis">
+    <div class="kpi"><div class="label">Revenue {{ latest.year }}E</div><div class="value">US${{ fmt_m(latest.revenue) }}</div><div class="sub">{{ fmt_pct(latest.growth, 1, true) }} on {{ prev.year }}</div></div>
+    <div class="kpi"><div class="label">EBITDA margin</div><div class="value">{{ fmt_pct(latest.ebitda_margin) }}</div><div class="sub">EBITDA US${{ fmt_m(latest.ebitda) }}</div></div>
+    <div class="kpi"><div class="label">Employees</div><div class="value">{{ '{:,}'.format(latest.employees) }}</div><div class="sub">{{ co.presence|length }} countries</div></div>
+    <div class="kpi"><div class="label">{{ 'Market capitalisation' if co.market_cap else 'Ownership' }}</div><div class="value">{% if co.market_cap %}US${{ fmt_m(co.market_cap) }}{% else %}Private{% endif %}</div><div class="sub">{{ co.ticker or co.ownership }}</div></div>
+  </div>
+
+  {% if slice_info %}
+  <div class="callout"><b>In your selection ({{ slice_info.label }}):</b> {{ co.name }} earns US${{ '{:,.0f}'.format(slice_info.revenue) }} m in {{ year_now }}E, a {{ fmt_pct(slice_info.share) }} share of a US${{ fmt_bn(slice_info.market / 1000, 1) }} bn market, growing {{ fmt_pct(slice_info.cagr) }} a year since 2021.</div>
+  {% endif %}
+
+  <div class="dash-grid" style="margin-top:24px">
+    <div class="card">
+      <div class="panel-title"><h3>About</h3></div>
+      <div class="panel-body">
+        <p>{{ co.name }} provides {{ SUB[co.primary].phrase }}{% if co.subsectors|length > 1 %} and {{ SUB[co.subsectors[1]].phrase }}{% endif %} to customers in {{ co.presence|length }} countries, with particular strength in {{ VERT[co.verticals[0]].name }} and {{ VERT[co.verticals[1]].name }}. It is headquartered in {{ co.city }}.</p>
+        <dl class="dl">
+          <dt>Sub-sectors</dt><dd>{% for s in co.subsectors %}<a href="{{ url_for('dashboard', subsector=s, view='country') }}">{{ SUB[s].name }}</a>{{ ', ' if not loop.last }}{% endfor %}</dd>
+          <dt>Verticals</dt><dd>{% for v in co.verticals %}<a href="{{ url_for('dashboard', vertical=v, view='country') }}">{{ VERT[v].name }}</a>{{ ', ' if not loop.last }}{% endfor %}</dd>
+          <dt>Operates in</dt><dd>{% for c in co.presence %}<a href="{{ url_for('dashboard', country=c, view='subsector') }}">{{ COUNTRY[c].name }}</a>{{ ', ' if not loop.last }}{% endfor %}</dd>
+        </dl>
+      </div>
+    </div>
+    <div class="card">
+      <div class="panel-title"><h3>Latest news</h3><a class="small" href="{{ url_for('news_list', company=co.slug) }}">All news</a></div>
+      <div class="panel-body" style="max-height:330px;overflow:auto">
+        {% for n in news %}{{ news_compact(n) }}{% else %}<div class="empty">No recent news.</div>{% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="dash-grid even">
+    <div class="card"><div class="panel-title"><h3>Revenue, US$ m</h3></div><div class="panel-body"><div id="chart-rev"></div>
+      <script type="application/json" id="data-rev">{{ {'data': chart_rev}|tojson }}</script></div></div>
+    <div class="card"><div class="panel-title"><h3>EBITDA margin, %</h3></div><div class="panel-body"><div id="chart-margin"></div>
+      <script type="application/json" id="data-margin">{{ {'years': chart_margin|map(attribute='year')|list, 'values': chart_margin|map(attribute='value')|list}|tojson }}</script></div></div>
+  </div>
+
+  <div class="card" style="margin-top:24px">
+    <div class="panel-title"><h3>Financial summary, US$ m</h3><span class="small muted">{{ latest.year }} is an estimate</span></div>
+    <div class="panel-body table-scroll">
+      <table class="data fin">
+        <thead><tr><th></th>{% for r in fin %}<th class="{{ 'est' if r.status == 'E' }}">{{ r.year }}{{ r.status if r.status == 'E' }}</th>{% endfor %}</tr></thead>
+        <tbody>
+          <tr><td><b>Revenue</b></td>{% for r in fin %}<td><b>{{ '{:,.0f}'.format(r.revenue) }}</b></td>{% endfor %}</tr>
+          <tr class="sub"><td>Growth</td>{% for r in fin %}<td>{{ fmt_pct(r.growth, 1, true) if r.growth is not none else '' }}</td>{% endfor %}</tr>
+          <tr><td>Gross margin</td>{% for r in fin %}<td>{{ fmt_pct(r.gross_margin) }}</td>{% endfor %}</tr>
+          <tr><td>EBITDA</td>{% for r in fin %}<td>{{ '{:,.0f}'.format(r.ebitda) }}</td>{% endfor %}</tr>
+          <tr class="sub"><td>EBITDA margin</td>{% for r in fin %}<td>{{ fmt_pct(r.ebitda_margin) }}</td>{% endfor %}</tr>
+          <tr><td>Net income</td>{% for r in fin %}<td>{{ '{:,.0f}'.format(r.net_income) }}</td>{% endfor %}</tr>
+          <tr><td>Capital expenditure</td>{% for r in fin %}<td>{{ '{:,.0f}'.format(r.capex) }}</td>{% endfor %}</tr>
+          <tr><td>Employees</td>{% for r in fin %}<td>{{ '{:,}'.format(r.employees) }}</td>{% endfor %}</tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="three-col" style="margin-top:24px">
+    {% for dim, label in (('country', 'Revenue by country'), ('subsector', 'Revenue by sub-sector'), ('vertical', 'Revenue by vertical')) %}
+    <div class="card">
+      <div class="panel-title"><h3>{{ label }}, {{ year_now }}E</h3></div>
+      <div class="panel-body">
+        <ul class="bars-list">
+          {% for r in bd[dim][:6] %}
+          <li><a href="{{ url_for('dashboard', view='company', **{dim: r.id}) }}">{{ r.name }}</a><span class="v">{{ fmt_pct(r.share, 0) }}</span><span class="track"><i style="width:{{ r.share * 100 }}%"></i></span></li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="card" style="margin-top:24px">
+    <div class="panel-title"><h3>Peers</h3><span class="small muted">Companies with overlapping sub-sectors and verticals</span></div>
+    <div class="panel-body table-scroll">
+      <table class="data">
+        <thead><tr><th>Company</th><th>HQ</th><th>Revenue {{ year_now }}E (US$ m)</th><th>Growth</th><th>EBITDA margin</th></tr></thead>
+        <tbody>
+        {% for p in peers %}
+          <tr class="click" data-href="{{ url_for('company', slug=p.slug) }}"><td class="name"><a href="{{ url_for('company', slug=p.slug) }}">{{ p.name }}</a></td><td>{{ COUNTRY[p.hq].name }}</td><td>{{ '{:,.0f}'.format(p.revenue) }}</td><td>{{ fmt_pct(p.growth, 1, true) }}</td><td>{{ fmt_pct(p.ebitda_margin) }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,107 @@
+{% extends "admin/base.html" %}
+{% macro err(k) %}{% if errors[k] %}<div class="err">{{ errors[k] }}</div>{% endif %}{% endmacro %}
+{% block admin %}
+<div class="adm-title">
+  <h1>{{ 'Edit' if post else 'New' }} {{ singular }}</h1>
+  {% if post %}<a class="btn small outline" href="{{ url_for('news_article' if section == 'news' else 'whitepaper' if section == 'papers' else 'report', slug=post.slug) }}">View on site</a>{% endif %}
+</div>
+<form method="post" class="adm-form" id="editor-form" novalidate data-upload-url="{{ url_for('admin_upload') }}" data-preview-url="{{ url_for('admin_preview') }}">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+
+  <div class="field"><label for="title">{{ 'Headline' if section == 'news' else 'Title' }}</label><input id="title" name="title" type="text" value="{{ form.title or '' }}" maxlength="200" required>{{ err('title') }}</div>
+  <div class="field"><label for="summary">Summary</label><textarea id="summary" name="summary" rows="3" maxlength="500">{{ form.summary or '' }}</textarea><span class="hint">One or two sentences. Shown on the home page and list pages.</span>{{ err('summary') }}</div>
+
+  {% if section == 'news' %}
+  <fieldset><legend>News details</legend>
+    <div class="row3" style="display:grid;gap:16px;grid-template-columns:1fr 1fr 1fr">
+      <div class="field"><label for="type">Type</label><select id="type" name="type">{% for t in NEWS_TYPES %}<option value="{{ t }}" {{ 'selected' if form.type == t }}>{{ t }}</option>{% endfor %}</select>{{ err('type') }}</div>
+      <div class="field"><label for="source">Source</label><input id="source" name="source" type="text" value="{{ form.source or '' }}" placeholder="Press release"></div>
+      <div class="field"><label for="impact">Tone</label><select id="impact" name="impact">{% for t in ('positive','neutral','negative') %}<option value="{{ t }}" {{ 'selected' if form.impact == t }}>{{ t|capitalize }}</option>{% endfor %}</select></div>
+    </div>
+    <p class="hint" style="margin:14px 0 8px">Tag the story so it appears in the dashboard panels for these places. All optional.</p>
+    <div class="row">
+      <div class="field"><label for="company">Company</label><select id="company" name="company"><option value="">None</option>{% for s, c in companies_all.items()|sort(attribute='1.name') %}<option value="{{ s }}" {{ 'selected' if form.company == s }}>{{ c.name }}</option>{% endfor %}</select>{{ err('company') }}</div>
+      <div class="field"><label for="country">Country</label><select id="country" name="country"><option value="">None</option>{% for c in countries %}<option value="{{ c.id }}" {{ 'selected' if form.country == c.id }}>{{ c.name }}</option>{% endfor %}</select>{{ err('country') }}</div>
+      <div class="field"><label for="subsector">Sub-sector</label><select id="subsector" name="subsector"><option value="">None</option>{% for c in subsectors %}<option value="{{ c.id }}" {{ 'selected' if form.subsector == c.id }}>{{ c.name }}</option>{% endfor %}</select></div>
+      <div class="field"><label for="vertical">Vertical</label><select id="vertical" name="vertical"><option value="">None</option>{% for c in verticals %}<option value="{{ c.id }}" {{ 'selected' if form.vertical == c.id }}>{{ c.name }}</option>{% endfor %}</select></div>
+    </div>
+  </fieldset>
+  {% elif section == 'papers' %}
+  <fieldset><legend>White paper details</legend>
+    <div class="row">
+      <div class="field"><label for="author">Author</label><input id="author" name="author" type="text" value="{{ form.author or '' }}"></div>
+      <div class="field"><label for="tags">Topics</label><input id="tags" name="tags" type="text" value="{{ form.tags or '' }}" placeholder="Strategy, Regulation"><span class="hint">Separate with commas. Used for the topic filter.</span></div>
+    </div>
+    <div class="field" style="margin-top:14px"><label for="takeaways">Key takeaways</label><textarea id="takeaways" name="takeaways" rows="4">{{ form.takeaways or '' }}</textarea><span class="hint">One per line. Shown beside the article.</span></div>
+  </fieldset>
+  {% else %}
+  <fieldset><legend>Report details</legend>
+    <div class="field"><label for="subtitle">Subtitle</label><input id="subtitle" name="subtitle" type="text" value="{{ form.subtitle or '' }}"></div>
+    <div class="row3" style="display:grid;gap:16px;grid-template-columns:1fr 1fr 1fr;margin-top:14px">
+      <div class="field"><label for="price">Price (US$, single user)</label><input id="price" name="price" type="text" inputmode="numeric" value="{{ form.price if form.price is not none else '' }}" placeholder="2450">{{ err('price') }}</div>
+      <div class="field"><label for="pages">Pages</label><input id="pages" name="pages" type="text" inputmode="numeric" value="{{ form.pages or '' }}"></div>
+      <div class="field"><label for="category">Category</label><input id="category" name="category" type="text" value="{{ form.category or '' }}" placeholder="Regional"></div>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <div class="field"><label for="coverage">Coverage</label><input id="coverage" name="coverage" type="text" value="{{ form.coverage or '' }}" placeholder="Global"></div>
+      <div class="field"><label for="author">Author</label><input id="author" name="author" type="text" value="{{ form.author or '' }}"></div>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <div class="field"><label for="highlights">What is inside</label><textarea id="highlights" name="highlights" rows="4">{{ form.highlights or '' }}</textarea><span class="hint">One per line.</span></div>
+      <div class="field"><label for="toc">Contents</label><textarea id="toc" name="toc" rows="4">{{ form.toc or '' }}</textarea><span class="hint">One chapter per line.</span></div>
+    </div>
+    <p class="hint">Licence prices are calculated from the single-user price: team is 1.8 times and enterprise is 3 times.</p>
+  </fieldset>
+  {% endif %}
+
+  <div class="field">
+    <label for="body">{{ 'Overview' if section == 'reports' else 'Article' }}</label>
+    <div class="editor-tools">
+      <button type="button" class="btn small outline" id="btn-image">Insert image</button>
+      <button type="button" class="btn small outline" data-snippet="bar">Bar chart</button>
+      <button type="button" class="btn small outline" data-snippet="hbar">Ranked bars</button>
+      <button type="button" class="btn small outline" data-snippet="line">Line chart</button>
+      <button type="button" class="btn small outline" id="btn-preview">Preview</button>
+      <input type="file" id="file-body" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
+      <span class="hint" id="upload-status" role="status"></span>
+    </div>
+    <textarea id="body" name="body" class="body" spellcheck="true">{{ form.body or '' }}</textarea>
+    <span class="hint">Markdown: <code>## Heading</code>, <code>**bold**</code>, <code>- list</code>, <code>[link](https://example.com)</code>, tables.</span>
+    <details class="chart-data" style="margin-top:6px"><summary>How charts and images work</summary>
+      <p class="small">Click a chart button to insert a template, then replace the numbers. The first row is the header: the first cell names the categories, the rest name the series. Types: <code>bar</code>, <code>hbar</code>, <code>line</code>. Optional lines: <code>title</code>, <code>unit</code>, <code>source</code>, <code>decimals</code>.</p>
+      <p class="small">Images: click Insert image to upload. The text in quotes after the link becomes the caption: <code>![Alt text](/uploads/photo.png "Caption")</code>.</p>
+    </details>
+    <div class="preview-pane prose" id="preview-pane" hidden></div>
+  </div>
+
+  <fieldset><legend>Publishing</legend>
+    <div class="row3" style="display:grid;gap:16px;grid-template-columns:1fr 1fr 1fr">
+      <div class="field"><label for="date">Date</label><input id="date" name="date" type="text" value="{{ form.date or '' }}" placeholder="YYYY-MM-DD">{{ err('date') }}</div>
+      <div class="field"><label for="slug">Web address ending</label><input id="slug" name="slug" type="text" value="{{ form.slug or '' }}" placeholder="auto from title"><span class="hint">Leave empty to generate.</span></div>
+      <div class="field"><label for="cover">Featured image</label>
+        <div class="upload-row"><input id="cover" name="cover" type="text" value="{{ form.cover or '' }}" placeholder="Optional"><button type="button" class="btn small outline" id="btn-cover">Upload</button></div>
+        <input type="file" id="file-cover" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
+        <span class="hint">Shown as a small thumbnail on lists and cards, and at the top of the page.</span></div>
+    </div>
+  </fieldset>
+
+  <div style="display:flex;gap:12px;flex-wrap:wrap">
+    <button class="btn" type="submit" name="status" value="published">{{ 'Save and publish' if post else 'Publish' }}</button>
+    <button class="btn outline" type="submit" name="status" value="draft">{{ 'Move to drafts' if post and post.status == 'published' else 'Save as draft' }}</button>
+    <a class="btn outline" href="{{ url_for('admin_list', section=section) }}">Back to list</a>
+  </div>
+</form>
+{% if section == 'reports' and post %}
+<form method="post" action="{{ url_for('admin_report_file', post_id=post.id) }}" enctype="multipart/form-data" class="adm-form" style="margin-top:28px">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <fieldset><legend>Report file (subscribers only)</legend>
+    <p class="muted" style="margin-top:0">Upload the full report as a PDF. Only subscribers can download it. It is stored privately, not in the public uploads folder.</p>
+    {% if post.meta.file %}<p><b>A file is attached.</b> Uploading a new one replaces it.</p>{% endif %}
+    <div class="upload-row"><input type="file" name="file" accept="application/pdf"><button class="btn small" type="submit">Upload PDF</button>
+    {% if post.meta.file %}<button class="btn small outline" type="submit" name="remove" value="1" formnovalidate>Remove file</button>{% endif %}</div>
+  </fieldset>
+</form>
+{% endif %}
+<script type="application/json" id="snippets">{{ snippets|tojson }}</script>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/admin.js') }}"></script>{% endblock %}

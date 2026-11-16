@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}{{ p.title }} | {{ brand.name }}{% endblock %}
+{% block desc %}{{ p.summary }}{% endblock %}
+{% block content %}
+<section class="page-head dark">
+  <div class="wrap">
+    <div class="crumbs"><a href="{{ url_for('whitepapers') }}">White papers</a></div>
+    <h1 style="max-width:20em">{{ p.title }}</h1>
+    <p>{% if p.author %}{{ p.author }} &middot; {% endif %}{{ fmt_date(p.date, true) }} &middot; {{ read_min }} min read</p>
+  </div>
+</section>
+<div class="wrap">
+  {% if p.status != 'published' %}<div class="callout" style="margin-top:24px"><b>Draft.</b> Only signed-in admins can see this. <a href="{{ url_for('admin_edit', section='papers', post_id=p.id) }}">Edit it</a>.</div>{% endif %}
+  <div class="article-layout">
+    <article class="prose">
+      {% if p.cover %}<figure class="img-fig"><img src="{{ p.cover }}" alt=""></figure>{% endif %}
+      <p class="lead-p">{{ p.summary }}</p>
+      {% if locked %}
+      <div class="gate-inline">
+        <h3>Read the full white paper</h3>
+        <p>White papers are free with an account. Create one in a minute, or sign in if you already have one.</p>
+        <p><a class="btn" href="{{ url_for('signup', next=request.path) }}">Create a free account</a> <a class="btn outline" href="{{ url_for('login', next=request.path) }}">Sign in</a></p>
+      </div>
+      {% else %}{{ body }}{% endif %}
+      {% if is_admin() %}<p class="small" style="font-family:var(--sans)"><a href="{{ url_for('admin_edit', section='papers', post_id=p.id) }}">Edit this white paper</a></p>{% endif %}
+    </article>
+    <aside>
+      <div class="side-box">
+        {% if p.meta.takeaways %}<h3 style="font-size:1.1rem">Key takeaways</h3>
+        <ul>{% for t in p.meta.takeaways %}<li>{{ t }}</li>{% endfor %}</ul>{% endif %}
+        {% if not locked %}<button class="btn outline small no-print" data-print type="button">Print or save as PDF</button>{% endif %}
+        <p class="small muted" style="margin:14px 0 0">Want the underlying numbers? <a href="{{ url_for('dashboard') }}">Open the dashboard</a> or see our <a href="{{ url_for('reports') }}">reports</a>.</p>
+      </div>
+    </aside>
+  </div>
+  {% if more %}
+  <section style="padding-bottom:72px">
+    <h3>More white papers</h3>
+    <div class="grid-3" style="margin-top:18px">
+      {% for m in more %}<a class="paper-card" href="{{ url_for('whitepaper', slug=m.slug) }}"><div class="small muted">{{ fmt_date(m.date) }}</div><h4 style="margin:6px 0">{{ m.title }}</h4><p>{{ m.summary[:110] }}{{ '...' if m.summary|length > 110 }}</p></a>{% endfor %}
+    </div>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

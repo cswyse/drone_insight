@@ -1,0 +1,21 @@
+{% extends "admin/base.html" %}
+{% from "_macros.html" import pager, flashes %}
+{% block admin %}
+<div class="adm-title"><h1>Messages</h1></div>
+{% if not to %}<div class="flash error">No enquiry address is set, so messages are only saved here. Add one in <a href="{{ url_for('admin_settings') }}">Settings</a>.</div>
+{% elif not smtp %}<div class="flash">Messages are saved here. To also get them by email at <b>{{ to }}</b>, set the <code>SMTP_HOST</code>, <code>SMTP_USER</code> and <code>SMTP_PASSWORD</code> environment variables (see the README).</div>{% endif %}
+<div class="filter-links"><a href="{{ url_for('admin_messages') }}" class="{{ 'on' if not kind }}">All</a><a href="{{ url_for('admin_messages', kind='pricing') }}" class="{{ 'on' if kind == 'pricing' }}">Pricing</a><a href="{{ url_for('admin_messages', kind='contact') }}" class="{{ 'on' if kind == 'contact' }}">Contact</a></div>
+{% for m in msgs %}
+<article class="msg {{ 'new' if m.status == 'new' }}">
+  <header><b>{{ m.name }}</b> <a href="mailto:{{ m.email }}">{{ m.email }}</a>{% if m.company %} &middot; {{ m.company }}{% endif %}
+    <span class="small muted"> &middot; {{ m.created[:16]|replace('T', ' ') }} &middot; {{ 'Pricing: ' ~ m.topic if m.kind == 'pricing' else 'Contact' }}{% if m.user_id %} &middot; <a href="{{ url_for('admin_user', uid=m.user_id) }}">has account</a>{% endif %}
+    {% if m.emailed %} &middot; emailed{% elif m.email_error %} &middot; email failed: {{ m.email_error }}{% endif %}</span></header>
+  {% if m.subject %}<p style="margin:8px 0 0"><b>{{ m.subject }}</b></p>{% endif %}
+  <p style="white-space:pre-wrap;margin:6px 0 10px">{{ m.message or '(no message)' }}</p>
+  <form method="post" action="{{ url_for('admin_message_action', mid=m.id, action='read' if m.status == 'new' else 'unread') }}" class="inline-form"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn small outline" type="submit">{{ 'Mark as read' if m.status == 'new' else 'Mark as new' }}</button></form>
+  <form method="post" action="{{ url_for('admin_message_action', mid=m.id, action='delete') }}" class="inline-form" onsubmit="return confirm('Delete this message?')"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn small outline" type="submit">Delete</button></form>
+</article>
+{% else %}<div class="empty">No messages yet. Contact and pricing form submissions appear here.</div>{% endfor %}
+{{ pager(page, pages, 'admin_messages', params) }}
+<div style="height:60px"></div>
+{% endblock %}

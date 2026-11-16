@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% from "_macros.html" import fld, flashes %}
+{% block title %}Pricing | {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="page-head"><div class="wrap"><h1>Plans</h1><p>Start free with white papers. Subscribe for the full dashboard and every report.</p></div></section>
+<div class="wrap" style="padding:30px 28px 80px">
+  <div class="tiers">
+    <div class="tier">
+      <h3>Free</h3><div class="tier-price">No charge</div>
+      <ul class="check"><li>Every white paper in full</li><li>Latest news and summaries</li><li>Optional research mailing list</li></ul>
+      {% if user %}<p class="muted small" style="margin:0">{{ 'You have an account.' }}</p>{% else %}<a class="btn outline" href="{{ url_for('signup') }}">Create a free account</a>{% endif %}
+    </div>
+    <div class="tier featured">
+      <h3>Subscriber</h3><div class="tier-price">{{ pricing.subscriber_price }}</div>
+      {% if pricing.subscriber_note %}<p class="small muted" style="margin:-6px 0 14px">{{ pricing.subscriber_note }}</p>{% endif %}
+      <ul class="check"><li>Everything in Free</li><li>The full market intelligence dashboard</li><li>Company profiles and financials</li><li>All market reports included</li></ul>
+      <a class="btn" href="#enquiry">Request a subscription</a>
+    </div>
+  </div>
+  <div class="narrow" id="enquiry" style="margin-top:56px">
+    <h2 style="font-size:1.6rem">Request access or ask a question</h2>
+    <p class="muted">Tell us what you need and we will get back to you by email. Single reports can also be bought without a subscription.</p>
+    <div id="sent">{{ flashes() }}</div>
+    {% if errors.form %}<div class="flash error" role="alert">{{ errors.form }}</div>{% endif %}
+    <form method="post" class="form-grid" novalidate>
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <div class="hp" aria-hidden="true"><label>Leave this empty<input name="website" tabindex="-1" autocomplete="off"></label></div>
+      {{ fld('name', 'Name', form, errors, ac='name', req=True) }}
+      {{ fld('email', 'Email', form, errors, type='email', ac='email', req=True) }}
+      {{ fld('company', 'Company', form, errors, ac='organization') }}
+      <div class="field"><label for="topic">I am interested in</label>
+        <select id="topic" name="topic" required><option value="">Choose one</option>{% for t in topics %}<option {{ 'selected' if form.topic == t }}>{{ t }}</option>{% endfor %}</select>
+        {% if errors.topic %}<div class="err">{{ errors.topic }}</div>{% endif %}</div>
+      <div class="field"><label for="message">Anything we should know? (optional)</label><textarea id="message" name="message" rows="5">{{ form.message or '' }}</textarea>{% if errors.message %}<div class="err">{{ errors.message }}</div>{% endif %}</div>
+      <div><button class="btn" type="submit">Send request</button></div>
+      <p class="small muted" style="margin:0">We use your details only to reply. See the <a href="{{ url_for('privacy') }}">Privacy Policy</a>.</p>
+    </form>
+  </div>
+</div>
+{% endblock %}

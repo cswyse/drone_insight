@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pager, thumb %}
+{% block title %}Reports | {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div class="wrap">
+    <h1>Market reports</h1>
+    <p>In-depth reports with forecasts, company benchmarks and data packs. Purchase a licence for yourself, your team or your whole organisation.</p>
+  </div>
+</section>
+<div class="wrap" style="padding:24px 28px 72px">
+  <div class="filter-links" aria-label="Categories">
+    <a href="{{ url_for('reports') }}" class="{{ 'on' if not cat }}">All categories</a>
+    {% for c in cats %}<a href="{{ url_for('reports', category=c) }}" class="{{ 'on' if cat == c }}">{{ c }}</a>{% endfor %}
+  </div>
+  <div class="grid-3">
+    {% for r in reports %}
+    <a class="report-card" href="{{ url_for('report', slug=r.slug) }}">
+      {% if r.cover %}{{ thumb(r.cover) }}<h3 style="font-size:1.15rem;margin:0 0 8px">{{ r.title }}</h3>
+      {% else %}<div class="cover"><b>{{ r.title }}</b><span>{{ r.meta.coverage }}{% if r.meta.pages %} &middot; {{ r.meta.pages }} pages{% endif %}</span></div>{% endif %}
+      <div class="small muted">{{ r.meta.category }} &middot; {{ fmt_date(r.date) }}</div>
+      <p style="margin:8px 0 14px;flex:1">{{ r.meta.subtitle or r.summary }}</p>
+      <div class="price">From {{ money(r.meta.price) }}</div>
+    </a>
+    {% else %}<div class="empty">No reports in this category yet.</div>{% endfor %}
+  </div>
+  {{ pager(page, pages, 'reports', params) }}
+</div>
+{% endblock %}

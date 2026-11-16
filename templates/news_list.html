@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% from "_macros.html" import news_row, pager %}
+{% block title %}News | {{ brand.name }}{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div class="wrap">
+    <h1>News</h1>
+    <p>Company announcements and market developments from across the sectors, countries and companies we track.</p>
+  </div>
+</section>
+<div class="wrap" style="padding-bottom:72px">
+  <form class="toolbar" method="get" action="{{ url_for('news_list') }}">
+    <input type="search" name="q" value="{{ q }}" placeholder="Search news" aria-label="Search news">
+    <select name="type" aria-label="Type" data-auto><option value="">All types</option>
+      {% for t in NEWS_TYPES %}<option value="{{ t }}" {{ 'selected' if ntype == t }}>{{ t }}</option>{% endfor %}</select>
+    {% for k, v in f.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+    {% if company_slug %}<input type="hidden" name="company" value="{{ company_slug }}">{% endif %}
+    <button class="btn navy small" type="submit">Search</button>
+  </form>
+  {% if chips %}
+  <div class="chips" style="margin-bottom:10px">
+    <span class="muted small">Showing news for</span>
+    {% for c in chips %}<span class="chip">{{ c.name }}<a href="{{ c.remove }}" aria-label="Remove {{ c.name }} filter">&times;</a></span>{% endfor %}
+    {% if f %}<a class="small" href="{{ url_for('dashboard', **f) }}">Open in dashboard</a>{% endif %}
+  </div>
+  {% endif %}
+  <div class="feed">
+    {% for n in items %}{{ news_row(n) }}{% else %}
+      <div class="empty">No news matches your search. Try a different keyword, or remove a filter.</div>
+    {% endfor %}
+  </div>
+  {{ pager(page, pages, 'news_list', params) }}
+</div>
+{% endblock %}
