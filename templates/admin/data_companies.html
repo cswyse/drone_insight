@@ -1,0 +1,32 @@
+{% extends "admin/base.html" %}
+{% from "admin/_data_macros.html" import data_nav %}
+{% from "_macros.html" import pager %}
+{% block admin %}
+{{ data_nav('companies') }}
+<div class="adm-title" style="padding-top:12px"><h1>Companies</h1><a class="btn small" href="{{ url_for('admin_company') }}">Add a company</a></div>
+<form class="toolbar" method="get" style="padding-top:0"><input type="search" name="q" value="{{ q }}" placeholder="Search by name or ticker" aria-label="Search companies">
+  <select name="show" aria-label="Filter" onchange="this.form.submit()"><option value="">All companies</option><option value="incomplete" {{ 'selected' if show == 'incomplete' }}>Needs attention</option></select>
+  <button class="btn small outline" type="submit">Search</button></form>
+<p class="muted small">{{ total }} compan{{ 'y' if total == 1 else 'ies' }}. A company appears in dashboard tables once it has financials and a revenue split.</p>
+<div class="table-scroll"><table class="data">
+  <thead><tr><th>Company</th><th>HQ</th><th>Ownership</th><th>Latest revenue (US$ m)</th><th>Status</th><th></th></tr></thead>
+  <tbody>{% for r in rows %}
+    <tr><td class="name"><a href="{{ url_for('admin_company', slug=r.slug) }}">{{ r.name }}</a>{% if r.ticker %}<div class="small muted">{{ r.ticker }}</div>{% endif %}</td>
+      <td>{{ COUNTRY[r.hq].name if r.hq in COUNTRY else '' }}</td><td>{{ r.ownership }}</td>
+      <td>{% if r.latest %}{{ '{:,.0f}'.format(r.latest.revenue) }} <span class="small muted">({{ r.latest.year }})</span>{% else %}<span class="muted">None</span>{% endif %}</td>
+      <td>{% if r.n_fin and r.has_split %}<span class="tag">On dashboard</span>{% else %}{% if not r.n_fin %}<span class="tag gray">No financials</span> {% endif %}{% if not r.has_split %}<span class="tag gray">No revenue split</span>{% endif %}{% endif %}</td>
+      <td><a href="{{ url_for('admin_company', slug=r.slug) }}">Edit</a> &nbsp; <a class="small" href="{{ url_for('company', slug=r.slug) }}">View</a></td></tr>
+  {% else %}<tr><td colspan="6"><div class="empty">No companies yet. Add your first one.</div></td></tr>{% endfor %}</tbody>
+</table></div>
+{{ pager(page, pages, 'admin_companies', params) }}
+
+<details style="margin:26px 0 80px;max-width:760px">
+  <summary><b>Import or export financials as CSV</b></summary>
+  <div class="adm-form" style="padding:14px 0 0">
+    <p class="muted" style="margin:0">Columns: <code>company</code>, <code>year</code>, <code>revenue</code>, and optionally <code>gross_margin_pct</code>, <code>ebitda</code>, <code>net_income</code>, <code>capex</code>, <code>employees</code>. Money is in US$ millions. Companies must already exist. Rows update the same company and year. If anything is wrong, nothing is imported.</p>
+    <p style="margin:0"><a class="btn small outline" href="{{ url_for('admin_fin_csv') }}">Download current financials</a></p>
+    <form method="post" action="{{ url_for('admin_fin_import') }}" enctype="multipart/form-data" class="upload-row">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="file" name="file" accept=".csv,text/csv" required><button class="btn small" type="submit">Import CSV</button></form>
+  </div>
+</details>
+{% endblock %}

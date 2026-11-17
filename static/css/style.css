@@ -140,7 +140,7 @@ select:focus, input:focus { border-color: var(--accent); }
 .dash-head .chip { background: var(--background); color: var(--primary); } .dash-head .chip a { color: var(--primary); }
 .dash-head .chip.root { background: transparent; color: var(--on-primary); border-color: var(--on-primary-line); } .dash-head .chip.root a { color: var(--on-primary); }
 .dash-head .sep { color: var(--on-primary-dim); }
-.kpis { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); background: var(--background); margin-top: -1px; }
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); background: var(--background); margin-top: 32px; }
 .kpi { padding: 20px 24px; border-left: 1px solid var(--line); }
 .kpi:first-child { border-left: 0; }
 .kpi .label { font-size: .82rem; color: var(--muted); }
@@ -415,3 +415,66 @@ ul.check li::before { content: ""; position: absolute; left: 4px; top: 13px; wid
 @media (max-width: 560px) { .thumb { width: 84px; margin-left: 12px; } }
 .paper-card .thumb, .report-card .thumb { float: none; align-self: flex-start; margin: 0 0 12px; }
 .news-row .thumb { margin-top: 2px; }
+
+/* ---- dashboard custom sections ---- */
+.prose-sm { font-size: .95rem; line-height: 1.65; }
+.prose-sm > :first-child { margin-top: 0; } .prose-sm > :last-child { margin-bottom: 0; }
+.prose-sm a { text-decoration: underline; }
+.plain-list { margin: 0; padding-left: 1.15em; } .plain-list li { margin: 4px 0; }
+.sec-h { font: 600 .92rem var(--sans); color: var(--primary); margin: 0 0 6px; }
+@media (max-width: 720px) { .kpis { margin-top: 24px; } }
+
+/* ---- dashboard data admin ---- */
+.dtable { width: 100%; border-collapse: collapse; font-size: .88rem; }
+.dtable th { text-align: left; font: 600 .75rem var(--sans); color: var(--muted); padding: 6px 6px; border-bottom: 1px solid var(--line-strong); white-space: nowrap; }
+.dtable td { padding: 5px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.dtable input, .dtable select { width: 100%; min-width: 0; padding: 6px 8px; font-size: .88rem; }
+.dtable input.num { width: 78px; text-align: right; }
+.dtable td.num-col input { width: 78px; text-align: right; }
+.dtable tfoot td { font-weight: 600; border-top: 2px solid var(--line-strong); text-align: right; padding-right: 14px; }
+.dtable .rowlabel { white-space: nowrap; font-weight: 500; }
+.dtable input.bad { border-color: var(--neg); background: var(--neg-tint); }
+.steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin: 6px 0 30px; }
+.step { border: 1px solid var(--line); padding: 18px; background: var(--background); display: flex; flex-direction: column; gap: 6px; }
+.step b { font-family: var(--serif); font-weight: 400; font-size: 1.15rem; color: var(--primary); }
+.step .btn { align-self: flex-start; margin-top: auto; }
+.pct-sum { font-size: .82rem; color: var(--muted); } .pct-sum.ok { color: var(--pos); } .pct-sum.off { color: var(--neg); }
+.split-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+.warn { border-left: 4px solid var(--highlight); background: var(--soft); padding: 12px 16px; margin: 0 0 18px; }
+.danger-zone { border: 1px solid var(--line-strong); padding: 18px 20px; margin: 30px 0 70px; }
+.sec-row { display: grid; grid-template-columns: minmax(0, 2fr) 120px 110px 70px 70px auto; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.sec-row.head { font: 600 .75rem var(--sans); color: var(--muted); }
+.sec-row input[type=text], .sec-row select { width: 100%; }
+.sec-row input[type=number] { width: 100%; }
+@media (max-width: 900px) { .steps, .split-grid { grid-template-columns: 1fr; } .sec-row { grid-template-columns: 1fr 1fr; } }
+.adm-form fieldset { min-width: 0; }
+#market-grid input.num { width: 60px; padding: 6px 6px; }
+#market-grid td { padding: 3px 3px; } #market-grid .rowlabel { font-size: .82rem; white-space: normal; min-width: 190px; }
+
+/* ---------- Dashboard table tools ---------- */
+.tbl-tools { display: flex; align-items: center; gap: 14px; padding: 14px 22px 0; }
+.tbl-search { flex: 1; max-width: 340px; padding: 9px 12px; border: 1px solid var(--line); background: var(--bg, #fff); color: var(--ink); font: inherit; font-size: .92rem; }
+.tbl-search:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
+table.sortable th[data-sort] { cursor: pointer; user-select: none; }
+table.sortable th[data-sort]:hover { color: var(--accent); }
+table.sortable th[aria-sort="ascending"]::after { content: " \25B2"; font-size: .65em; }
+table.sortable th[aria-sort="descending"]::after { content: " \25BC"; font-size: .65em; }
+table.sortable th[aria-sort="ascending"], table.sortable th[aria-sort="descending"] { color: var(--primary); }
+table.sortable th:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tbl-pager a.off { pointer-events: none; }
+[hidden] { display: none !important; }
+
+/* ---------- Confidence indicator ---------- */
+.conf { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; font-size: .85rem; color: var(--ink); cursor: help; }
+.conf .bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 12px; }
+.conf .bars i { display: block; width: 3px; background: var(--line); border-radius: 0; }
+.conf .bars i:nth-child(1) { height: 4px; } .conf .bars i:nth-child(2) { height: 6px; }
+.conf .bars i:nth-child(3) { height: 9px; } .conf .bars i:nth-child(4) { height: 12px; }
+.conf-4 .bars i, .conf-3 .bars i:nth-child(-n+3), .conf-2 .bars i:nth-child(-n+2), .conf-1 .bars i:nth-child(1) { background: var(--primary); }
+.conf-1 .bars i:nth-child(1), .conf-2 .bars i:nth-child(-n+2) { background: var(--muted); }
+table.data td .conf { justify-content: flex-end; }
+.kpi .sub .conf { font-size: inherit; color: var(--muted); margin-left: 4px; }
+.conf-key { display: flex; flex-wrap: wrap; gap: 6px 22px; align-items: center; margin-top: 18px; }
+.conf-key .conf { color: var(--muted); }
+.panel-title .tbl-reset { font-weight: 600; }
+.conf-select { min-width: 150px; }

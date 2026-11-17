@@ -1,0 +1,48 @@
+{% extends "admin/base.html" %}
+{% from "admin/_data_macros.html" import data_nav %}
+{% block admin %}
+{{ data_nav('sections') }}
+<div class="adm-title" style="padding-top:12px"><h1>Page sections</h1></div>
+<p class="muted" style="max-width:48em">Add your own sections to the dashboard pages, such as <i>Products</i> or <i>Website</i> on every company page. You set up the section here once. Then you fill it in for each company, country, sub-sector or vertical, and it shows on that page only when it has content.</p>
+<form method="post" class="adm-form" style="max-width:1000px">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  {% for ent, label, items in groups %}
+  <fieldset><legend>{{ label }}</legend>
+    <div class="sec-row head"><span>Section title</span><span>Type</span><span>Placed</span><span>Order</span><span>Show</span><span></span></div>
+    {% for s in items %}
+    <div class="sec-row">
+      <input type="text" name="s_{{ s.id }}_title" value="{{ s.title }}" aria-label="Title" required>
+      <select name="s_{{ s.id }}_kind" aria-label="Type">{% for k, kl, kh in kinds %}<option value="{{ k }}" {{ 'selected' if s.kind == k }}>{{ kl }}</option>{% endfor %}</select>
+      <select name="s_{{ s.id }}_position" aria-label="Placed" {{ 'disabled' if s.kind == 'fact' }}><option value="top" {{ 'selected' if s.position != 'bottom' }}>Near the top</option><option value="bottom" {{ 'selected' if s.position == 'bottom' }}>At the bottom</option></select>
+      <input type="number" name="s_{{ s.id }}_sort" value="{{ s.sort }}" aria-label="Order">
+      <label class="checkrow" style="align-items:center"><input type="checkbox" name="s_{{ s.id }}_visible" value="1" {{ 'checked' if s.visible }} style="margin:0"></label>
+      <button type="submit" class="btn small outline" formaction="{{ url_for('admin_section_delete', sid=s.id) }}" formnovalidate onclick="return confirm('Delete the section {{ s.title|e }} and everything entered in it?')">Delete</button>
+    </div>
+    {% endfor %}
+    {% for i in range(2) %}
+    <div class="sec-row">
+      <input type="text" name="new_{{ ent }}_{{ i }}_title" placeholder="New section title" aria-label="New section title">
+      <select name="new_{{ ent }}_{{ i }}_kind" aria-label="Type">{% for k, kl, kh in kinds %}<option value="{{ k }}">{{ kl }}</option>{% endfor %}</select>
+      <span></span><span></span><span></span><span></span>
+    </div>
+    {% endfor %}
+  </fieldset>
+  {% endfor %}
+
+  <fieldset><legend>Built-in panels</legend>
+    <p class="muted" style="margin-top:0">Untick a panel to hide it from the page.</p>
+    <div class="row">
+      {% for page, title in (('dashboard', 'Dashboard'), ('company', 'Company page')) %}
+      <div><h4 style="margin:0 0 8px">{{ title }}</h4>
+        {% for bid, blabel in blocks[page] %}<label class="checkrow" style="margin-bottom:6px"><input type="checkbox" name="show_{{ page }}.{{ bid }}" value="1" {{ 'checked' if (page ~ '.' ~ bid) not in hidden }}><span>{{ blabel }}</span></label>{% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+  </fieldset>
+
+  <details class="small muted"><summary>What the types mean</summary>
+    <ul class="plain-list">{% for k, kl, kh in kinds %}<li><b>{{ kl }}</b>: {{ kh }}</li>{% endfor %}</ul>
+    <p>Short facts appear in the About box. The other types get their own card, near the top of the page or at the bottom. Sections with the same “Placed” setting are ordered by the Order number.</p></details>
+  <div><button class="btn" type="submit">Save changes</button></div>
+</form>
+{% endblock %}

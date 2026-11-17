@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import news_compact, flag %}
+{% from "_macros.html" import news_compact, flag, n0, section_cards, facts_rows, conf, conf_key %}
 {% block title %}{{ co.name }} | {{ brand.name }}{% endblock %}
 {% block content %}
 <section class="dash-head">
@@ -9,10 +9,10 @@
       <div>
         <h1 style="margin-bottom:6px">{{ co.name }}</h1>
         <div class="co-meta">
-          <span>{{ flag(co.hq) }}{{ co.city }}, {{ COUNTRY[co.hq].name }}</span>
-          <span>{{ co.ownership }}{% if co.ticker %} &middot; {{ co.exchange }}: {{ co.ticker }}{% endif %}</span>
-          <span>Founded {{ co.founded }}</span>
-          <span>{{ SUB[co.primary].name }}</span>
+          {% if co.hq in COUNTRY %}<span>{{ flag(co.hq) }}{% if co.city %}{{ co.city }}, {% endif %}{{ COUNTRY[co.hq].name }}</span>{% endif %}
+          <span>{{ co.ownership }}{% if co.ticker %} &middot; {% if co.exchange %}{{ co.exchange }}: {% endif %}{{ co.ticker }}{% endif %}</span>
+          {% if co.founded %}<span>Founded {{ co.founded }}</span>{% endif %}
+          {% if co.primary %}<span>{{ SUB[co.primary].name }}</span>{% endif %}
         </div>
       </div>
       <a class="btn ghost small" href="{{ back }}">Back to dashboard</a>
@@ -22,9 +22,9 @@
 
 <div class="wrap" style="padding-bottom:64px">
   <div class="kpis">
-    <div class="kpi"><div class="label">Revenue {{ latest.year }}E</div><div class="value">US${{ fmt_m(latest.revenue) }}</div><div class="sub">{{ fmt_pct(latest.growth, 1, true) }} on {{ prev.year }}</div></div>
-    <div class="kpi"><div class="label">EBITDA margin</div><div class="value">{{ fmt_pct(latest.ebitda_margin) }}</div><div class="sub">EBITDA US${{ fmt_m(latest.ebitda) }}</div></div>
-    <div class="kpi"><div class="label">Employees</div><div class="value">{{ '{:,}'.format(latest.employees) }}</div><div class="sub">{{ co.presence|length }} countries</div></div>
+    <div class="kpi"><div class="label">Revenue {{ latest.year }}{{ 'E' if latest.status == 'E' }}</div><div class="value">{% if latest.revenue is not none %}US${{ fmt_m(latest.revenue) }}{% else %}n/a{% endif %}</div><div class="sub">{% if latest.growth is not none %}{{ fmt_pct(latest.growth, 1, true) }} on {{ prev.year }}{% else %}No prior year to compare{% endif %}{% if latest.conf %} &middot; {{ conf(latest.conf) }}{% endif %}</div></div>
+    <div class="kpi"><div class="label">EBITDA margin</div><div class="value">{{ fmt_pct(latest.ebitda_margin) }}</div><div class="sub">{% if latest.ebitda is not none %}EBITDA US${{ fmt_m(latest.ebitda) }}{% else %}Not reported{% endif %}</div></div>
+    <div class="kpi"><div class="label">Employees</div><div class="value">{{ '{:,}'.format(latest.employees) if latest.employees is not none else 'n/a' }}</div><div class="sub">{{ co.presence|length }} countr{{ 'y' if co.presence|length == 1 else 'ies' }}</div></div>
     <div class="kpi"><div class="label">{{ 'Market capitalisation' if co.market_cap else 'Ownership' }}</div><div class="value">{% if co.market_cap %}US${{ fmt_m(co.market_cap) }}{% else %}Private{% endif %}</div><div class="sub">{{ co.ticker or co.ownership }}</div></div>
   </div>
 
@@ -32,52 +32,66 @@
   <div class="callout"><b>In your selection ({{ slice_info.label }}):</b> {{ co.name }} earns US${{ '{:,.0f}'.format(slice_info.revenue) }} m in {{ year_now }}E, a {{ fmt_pct(slice_info.share) }} share of a US${{ fmt_bn(slice_info.market / 1000, 1) }} bn market, growing {{ fmt_pct(slice_info.cagr) }} a year since 2021.</div>
   {% endif %}
 
-  <div class="dash-grid" style="margin-top:24px">
+  <div class="dash-grid" style="margin-top:24px{{ ';grid-template-columns:1fr' if 'company.news' in hidden }}">
     <div class="card">
       <div class="panel-title"><h3>About</h3></div>
       <div class="panel-body">
-        <p>{{ co.name }} provides {{ SUB[co.primary].phrase }}{% if co.subsectors|length > 1 %} and {{ SUB[co.subsectors[1]].phrase }}{% endif %} to customers in {{ co.presence|length }} countries, with particular strength in {{ VERT[co.verticals[0]].name }} and {{ VERT[co.verticals[1]].name }}. It is headquartered in {{ co.city }}.</p>
+        {% if co.description %}<div class="prose-sm">{{ co.description|md }}</div>
+        {% elif co.primary %}<p>{{ co.name }} provides {{ SUB[co.primary].phrase }}{% if co.subsectors|length > 1 %} and {{ SUB[co.subsectors[1]].phrase }}{% endif %}{% if co.presence %} to customers in {{ co.presence|length }} countr{{ 'y' if co.presence|length == 1 else 'ies' }}{% endif %}{% if co.verticals %}, with particular strength in {{ VERT[co.verticals[0]].name }}{% if co.verticals|length > 1 %} and {{ VERT[co.verticals[1]].name }}{% endif %}{% endif %}.{% if co.city %} It is headquartered in {{ co.city }}.{% endif %}</p>{% endif %}
         <dl class="dl">
-          <dt>Sub-sectors</dt><dd>{% for s in co.subsectors %}<a href="{{ url_for('dashboard', subsector=s, view='country') }}">{{ SUB[s].name }}</a>{{ ', ' if not loop.last }}{% endfor %}</dd>
-          <dt>Verticals</dt><dd>{% for v in co.verticals %}<a href="{{ url_for('dashboard', vertical=v, view='country') }}">{{ VERT[v].name }}</a>{{ ', ' if not loop.last }}{% endfor %}</dd>
-          <dt>Operates in</dt><dd>{% for c in co.presence %}<a href="{{ url_for('dashboard', country=c, view='subsector') }}">{{ COUNTRY[c].name }}</a>{{ ', ' if not loop.last }}{% endfor %}</dd>
+          {{ facts_rows(blocks.facts) }}
+          {% if co.subsectors %}<dt>Sub-sectors</dt><dd>{% for s in co.subsectors %}<a href="{{ url_for('dashboard', subsector=s, view='country') }}">{{ SUB[s].name }}</a>{{ ', ' if not loop.last }}{% endfor %}</dd>{% endif %}
+          {% if co.verticals %}<dt>Verticals</dt><dd>{% for v in co.verticals %}<a href="{{ url_for('dashboard', vertical=v, view='country') }}">{{ VERT[v].name }}</a>{{ ', ' if not loop.last }}{% endfor %}</dd>{% endif %}
+          {% if co.presence %}<dt>Operates in</dt><dd>{% for c in co.presence %}<a href="{{ url_for('dashboard', country=c, view='subsector') }}">{{ COUNTRY[c].name }}</a>{{ ', ' if not loop.last }}{% endfor %}</dd>{% endif %}
         </dl>
       </div>
     </div>
+    {% if 'company.news' not in hidden %}
     <div class="card">
       <div class="panel-title"><h3>Latest news</h3><a class="small" href="{{ url_for('news_list', company=co.slug) }}">All news</a></div>
       <div class="panel-body" style="max-height:330px;overflow:auto">
         {% for n in news %}{{ news_compact(n) }}{% else %}<div class="empty">No recent news.</div>{% endfor %}
       </div>
     </div>
+    {% endif %}
   </div>
+  {{ section_cards(blocks.top) }}
 
+  {% if 'company.charts' not in hidden and chart_rev %}
   <div class="dash-grid even">
     <div class="card"><div class="panel-title"><h3>Revenue, US$ m</h3></div><div class="panel-body"><div id="chart-rev"></div>
       <script type="application/json" id="data-rev">{{ {'data': chart_rev}|tojson }}</script></div></div>
-    <div class="card"><div class="panel-title"><h3>EBITDA margin, %</h3></div><div class="panel-body"><div id="chart-margin"></div>
-      <script type="application/json" id="data-margin">{{ {'years': chart_margin|map(attribute='year')|list, 'values': chart_margin|map(attribute='value')|list}|tojson }}</script></div></div>
+    {% if chart_margin %}<div class="card"><div class="panel-title"><h3>EBITDA margin, %</h3></div><div class="panel-body"><div id="chart-margin"></div>
+      <script type="application/json" id="data-margin">{{ {'years': chart_margin|map(attribute='year')|list, 'values': chart_margin|map(attribute='value')|list}|tojson }}</script></div></div>{% endif %}
   </div>
+  {% endif %}
 
+  {% if 'company.financials' not in hidden %}
   <div class="card" style="margin-top:24px">
-    <div class="panel-title"><h3>Financial summary, US$ m</h3><span class="small muted">{{ latest.year }} is an estimate</span></div>
+    <div class="panel-title"><h3>Financial summary, US$ m</h3>{% if fin and latest.status == 'E' %}<span class="small muted">{{ latest.year }} is an estimate</span>{% endif %}</div>
     <div class="panel-body table-scroll">
+      {% if not fin %}<div class="empty">No financials have been added for this company yet.</div>{% else %}
       <table class="data fin">
         <thead><tr><th></th>{% for r in fin %}<th class="{{ 'est' if r.status == 'E' }}">{{ r.year }}{{ r.status if r.status == 'E' }}</th>{% endfor %}</tr></thead>
         <tbody>
-          <tr><td><b>Revenue</b></td>{% for r in fin %}<td><b>{{ '{:,.0f}'.format(r.revenue) }}</b></td>{% endfor %}</tr>
+          <tr><td><b>Revenue</b></td>{% for r in fin %}<td><b>{{ n0(r.revenue) }}</b></td>{% endfor %}</tr>
           <tr class="sub"><td>Growth</td>{% for r in fin %}<td>{{ fmt_pct(r.growth, 1, true) if r.growth is not none else '' }}</td>{% endfor %}</tr>
           <tr><td>Gross margin</td>{% for r in fin %}<td>{{ fmt_pct(r.gross_margin) }}</td>{% endfor %}</tr>
-          <tr><td>EBITDA</td>{% for r in fin %}<td>{{ '{:,.0f}'.format(r.ebitda) }}</td>{% endfor %}</tr>
+          <tr><td>EBITDA</td>{% for r in fin %}<td>{{ n0(r.ebitda) }}</td>{% endfor %}</tr>
           <tr class="sub"><td>EBITDA margin</td>{% for r in fin %}<td>{{ fmt_pct(r.ebitda_margin) }}</td>{% endfor %}</tr>
-          <tr><td>Net income</td>{% for r in fin %}<td>{{ '{:,.0f}'.format(r.net_income) }}</td>{% endfor %}</tr>
-          <tr><td>Capital expenditure</td>{% for r in fin %}<td>{{ '{:,.0f}'.format(r.capex) }}</td>{% endfor %}</tr>
-          <tr><td>Employees</td>{% for r in fin %}<td>{{ '{:,}'.format(r.employees) }}</td>{% endfor %}</tr>
+          <tr><td>Net income</td>{% for r in fin %}<td>{{ n0(r.net_income) }}</td>{% endfor %}</tr>
+          <tr><td>Capital expenditure</td>{% for r in fin %}<td>{{ n0(r.capex) }}</td>{% endfor %}</tr>
+          <tr><td>Employees</td>{% for r in fin %}<td>{{ n0(r.employees) }}</td>{% endfor %}</tr>
+          <tr class="sub"><td>Confidence</td>{% for r in fin %}<td>{{ conf(r.conf) }}</td>{% endfor %}</tr>
         </tbody>
       </table>
+      {{ conf_key() }}
+      {% endif %}
     </div>
   </div>
+  {% endif %}
 
+  {% if 'company.splits' not in hidden and co.has_split %}
   <div class="three-col" style="margin-top:24px">
     {% for dim, label in (('country', 'Revenue by country'), ('subsector', 'Revenue by sub-sector'), ('vertical', 'Revenue by vertical')) %}
     <div class="card">
@@ -92,7 +106,9 @@
     </div>
     {% endfor %}
   </div>
+  {% endif %}
 
+  {% if 'company.peers' not in hidden and peers %}
   <div class="card" style="margin-top:24px">
     <div class="panel-title"><h3>Peers</h3><span class="small muted">Companies with overlapping sub-sectors and verticals</span></div>
     <div class="panel-body table-scroll">
@@ -100,11 +116,13 @@
         <thead><tr><th>Company</th><th>HQ</th><th>Revenue {{ year_now }}E (US$ m)</th><th>Growth</th><th>EBITDA margin</th></tr></thead>
         <tbody>
         {% for p in peers %}
-          <tr class="click" data-href="{{ url_for('company', slug=p.slug) }}"><td class="name"><a href="{{ url_for('company', slug=p.slug) }}">{{ p.name }}</a></td><td>{{ COUNTRY[p.hq].name }}</td><td>{{ '{:,.0f}'.format(p.revenue) }}</td><td>{{ fmt_pct(p.growth, 1, true) }}</td><td>{{ fmt_pct(p.ebitda_margin) }}</td></tr>
+          <tr class="click" data-href="{{ url_for('company', slug=p.slug) }}"><td class="name"><a href="{{ url_for('company', slug=p.slug) }}">{{ p.name }}</a></td><td>{{ COUNTRY[p.hq].name if p.hq in COUNTRY else '' }}</td><td>{{ '{:,.0f}'.format(p.revenue) }}</td><td>{{ fmt_pct(p.growth, 1, true) }}</td><td>{{ fmt_pct(p.ebitda_margin) }}</td></tr>
         {% endfor %}
         </tbody>
       </table>
     </div>
   </div>
+  {% endif %}
+  {{ section_cards(blocks.bottom) }}
 </div>
 {% endblock %}

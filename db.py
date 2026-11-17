@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS orders (
     report_slug TEXT, title TEXT, licence TEXT, amount INTEGER,
     name TEXT, email TEXT, company TEXT, created TEXT, status TEXT
 );
+CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -75,6 +76,31 @@ def conn():
 def init():
     with conn() as c:
         c.executescript(SCHEMA)
+
+
+def get_meta(key, default=""):
+    with conn() as c:
+        r = c.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
+    return r["value"] if r else default
+
+
+def set_meta(key, value):
+    with conn() as c:
+        c.execute("INSERT INTO meta (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, str(value)))
+
+
+def bump(c=None):
+    """Mark published content or dashboard data as changed, so every running worker reloads its in-memory copy.
+    Pass an open connection when called inside a transaction."""
+    if c is None:
+        with conn() as c2:
+            return bump(c2)
+    if True:
+        c.execute("INSERT INTO meta (key, value) VALUES ('version','1') ON CONFLICT(key) DO UPDATE SET value=CAST(value AS INTEGER)+1")
+
+
+def version():
+    return get_meta("version", "0")
 
 
 def slugify(s):
@@ -151,9 +177,11 @@ def save(kind, data, post_id=None):
         if post_id:
             c.execute("""UPDATE posts SET slug=?, title=?, summary=?, body=?, cover=?, date=?, author=?, tags=?,
                          status=?, meta=?, updated=? WHERE id=? AND kind=?""", vals + (now, post_id, kind))
+            bump(c)
             return post_id
         cur = c.execute("""INSERT INTO posts (slug, title, summary, body, cover, date, author, tags, status, meta, kind, created, updated)
                            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""", vals + (kind, now, now))
+        bump(c)
         return cur.lastrowid
 
 
@@ -166,12 +194,14 @@ def bulk_insert(kind, items):
 def delete(post_id):
     with conn() as c:
         c.execute("DELETE FROM posts WHERE id=?", (post_id,))
+    bump()
 
 
 def set_status(post_id, status):
     with conn() as c:
         c.execute("UPDATE posts SET status=?, updated=? WHERE id=?",
                   (status, datetime.utcnow().isoformat(timespec="seconds") + "Z", post_id))
+    bump()
 
 
 # ---- orders ----------------------------------------------------------

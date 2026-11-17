@@ -1,0 +1,45 @@
+{% extends "admin/base.html" %}
+{% from "admin/_data_macros.html" import data_nav %}
+{% block admin %}
+{{ data_nav('taxonomy') }}
+<div class="adm-title" style="padding-top:12px"><h1>Countries, sub-sectors and verticals</h1></div>
+<p class="muted" style="max-width:46em">These lists define how the market is split on the dashboard. Rename or reorder them here, add new ones in the empty rows, then enter market sizes for them. “Page content” lets you fill in the custom sections for that item.</p>
+<form method="post" class="adm-form" style="max-width:none">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  {% for kind, label, lookup in kinds %}
+  <fieldset><legend>{{ label }}</legend>
+    <div class="table-scroll"><table class="dtable">
+      <thead><tr><th style="width:60px">Order</th><th>Name</th>
+        {% if kind == 'country' %}<th>Region</th><th>City</th><th>Stock exchange</th><th style="width:90px">Flag code</th>{% endif %}<th></th></tr></thead>
+      <tbody>
+      {% for r in lookup.values() %}
+        <tr>
+          <td><input type="number" name="{{ kind }}__{{ r.id }}__sort" value="{{ loop.index0 }}" aria-label="Order for {{ r.name }}"></td>
+          <td><input type="text" name="{{ kind }}__{{ r.id }}__name" value="{{ r.name }}" required aria-label="Name"></td>
+          {% if kind == 'country' %}
+          <td><input type="text" name="{{ kind }}__{{ r.id }}__region" value="{{ r.region or '' }}" aria-label="Region"></td>
+          <td><input type="text" name="{{ kind }}__{{ r.id }}__city" value="{{ r.city or '' }}" aria-label="City"></td>
+          <td><input type="text" name="{{ kind }}__{{ r.id }}__exchange" value="{{ r.exchange or '' }}" aria-label="Stock exchange"></td>
+          <td><input type="text" name="{{ kind }}__{{ r.id }}__flag" value="{{ r.flag or '' }}" maxlength="6" aria-label="Flag code"></td>
+          {% endif %}
+          <td style="white-space:nowrap"><a class="small" href="{{ url_for('admin_dim_page', kind=kind, dim_id=r.id) }}">Page content</a>
+            <button type="submit" class="btn small outline" style="margin-left:8px" formaction="{{ url_for('admin_taxonomy_delete', kind=kind, dim_id=r.id) }}" formnovalidate onclick="return confirm('Delete {{ r.name|e }} and all its market data?')">Delete</button></td>
+        </tr>
+      {% endfor %}
+      {% for i in range(3) %}
+        <tr>
+          <td></td>
+          <td><input type="text" name="new_{{ kind }}_{{ i }}_name" placeholder="Add new {{ label|lower|replace('countries', 'country')|replace('sub-sectors', 'sub-sector')|replace('verticals', 'vertical') }}" aria-label="New name"></td>
+          {% if kind == 'country' %}<td><input type="text" name="new_{{ kind }}_{{ i }}_region" placeholder="Region" aria-label="Region"></td><td></td><td></td>
+          <td><input type="text" name="new_{{ kind }}_{{ i }}_flag" placeholder="e.g. es" maxlength="6" aria-label="Flag code"></td>{% endif %}
+          <td></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% if kind == 'country' %}<p class="small muted" style="margin:10px 0 0">Flag code is the two-letter country code, such as gb, us or de. Flags for all countries are included. Leave it empty for no flag.</p>{% endif %}
+  </fieldset>
+  {% endfor %}
+  <div><button class="btn" type="submit">Save changes</button></div>
+</form>
+{% endblock %}

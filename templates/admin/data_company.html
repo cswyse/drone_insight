@@ -1,0 +1,68 @@
+{% extends "admin/base.html" %}
+{% from "admin/_data_macros.html" import data_nav, section_fields %}
+{% block admin %}
+{{ data_nav('companies') }}
+<div class="adm-title" style="padding-top:12px"><h1>{{ co.name if co else 'Add a company' }}</h1>
+  <span>{% if co %}<a class="btn small outline" href="{{ url_for('company', slug=co.slug) }}">View page</a> {% endif %}<a class="btn small outline" href="{{ url_for('admin_companies') }}">Back to companies</a></span></div>
+{% macro err(k) %}{% if errors.get(k) %}<div class="err">{{ errors[k] }}</div>{% endif %}{% endmacro %}
+<form method="post" class="adm-form" style="max-width:1000px" id="company-form">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+
+  <fieldset><legend>Profile</legend>
+    <div class="field"><label for="name">Company name</label><input id="name" type="text" name="name" value="{{ form.name }}" required>{{ err('name') }}</div>
+    <div class="row" style="margin-top:14px">
+      <div class="field"><label for="hq">Headquarters country</label><select id="hq" name="hq"><option value="">Choose</option>{% for c in COUNTRY.values() %}<option value="{{ c.id }}" {{ 'selected' if form.hq == c.id }}>{{ c.name }}</option>{% endfor %}</select>{{ err('hq') }}</div>
+      <div class="field"><label for="city">City</label><input id="city" type="text" name="city" value="{{ form.city }}"></div>
+    </div>
+    <div class="row3 row" style="margin-top:14px">
+      <div class="field"><label for="ownership">Ownership</label><input id="ownership" type="text" name="ownership" value="{{ form.ownership }}" list="own-list"><datalist id="own-list">{% for o in ownership %}<option value="{{ o }}">{% endfor %}</datalist></div>
+      <div class="field"><label for="ticker">Ticker</label><input id="ticker" type="text" name="ticker" value="{{ form.ticker }}"></div>
+      <div class="field"><label for="exchange">Stock exchange</label><input id="exchange" type="text" name="exchange" value="{{ form.exchange }}"></div>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <div class="field"><label for="founded">Year founded</label><input id="founded" type="text" inputmode="numeric" name="founded" value="{{ form.founded }}">{{ err('founded') }}</div>
+      <div class="field"><label for="market_cap">Market capitalisation (US$ m)</label><input id="market_cap" type="text" inputmode="decimal" name="market_cap" value="{{ form.market_cap }}">{{ err('market_cap') }}</div>
+    </div>
+    <div class="field" style="margin-top:14px"><label for="description">Description</label><textarea id="description" name="description" rows="4">{{ form.description }}</textarea><span class="hint">Shown in the About box. Markdown works. If you leave it empty, a short description is written from the revenue split.</span></div>
+  </fieldset>
+
+  <fieldset><legend>Revenue split</legend>
+    <p class="muted" style="margin-top:0">Where the company earns its revenue, as percentages. Each list should add up to 100. If it does not, it is scaled to 100 when you save. This decides where the company shows up on the dashboard.</p>
+    <div class="split-grid">
+      {% for dim, label, lookup in (('country', 'By country', COUNTRY), ('subsector', 'By sub-sector', SUB), ('vertical', 'By vertical', VERT)) %}
+      <div data-split>
+        <h4 style="margin:0 0 8px">{{ label }}</h4>
+        <table class="dtable"><tbody>
+          {% for r in lookup.values() %}<tr><td>{{ r.name }}</td><td style="width:84px"><input type="text" inputmode="decimal" name="alloc_{{ dim }}_{{ r.id }}" value="{{ form.get('alloc_' ~ dim ~ '_' ~ r.id, '') }}" class="num {{ 'bad' if errors.get('alloc_' ~ dim ~ '_' ~ r.id) }}" aria-label="{{ r.name }} percent"></td></tr>{% endfor %}
+        </tbody></table>
+        <div class="pct-sum" data-sum>Total {{ sums[dim] }}%</div>
+      </div>
+      {% endfor %}
+    </div>
+  </fieldset>
+
+  <fieldset><legend>Financials (US$ millions)</legend>
+    <p class="muted" style="margin-top:0">Enter the years you have. Revenue is required for a year; the other figures are optional. Confidence says how reliable the year is: reported accounts, or an estimate (high, medium or low). Left on default, years up to {{ last_actual }} count as reported and later years as high-confidence estimates. Leave a year empty to skip it: the dashboard fills gaps from the years around it, and years after your last one follow the market.</p>
+    <div class="table-scroll"><table class="dtable">
+      <thead><tr><th>Year</th><th>Revenue</th><th>Gross margin %</th><th>EBITDA</th><th>Net income</th><th>Capex</th><th>Employees</th><th>Confidence</th></tr></thead>
+      <tbody>{% for y in fin_years %}
+        <tr><td class="rowlabel">{{ y }}{{ 'E' if y == year_now }}</td>
+        {% for k in ('revenue', 'gross_margin', 'ebitda', 'net_income', 'capex', 'employees') %}<td><input type="text" inputmode="decimal" name="fin_{{ y }}_{{ k }}" value="{{ form.get('fin_' ~ y ~ '_' ~ k, '') }}" class="{{ 'bad' if errors.get('fin_' ~ y ~ '_' ~ k) }}" style="min-width:90px" title="{{ errors.get('fin_' ~ y ~ '_' ~ k) or '' }}" aria-label="{{ y }} {{ k|replace('_', ' ') }}"></td>{% endfor %}
+        <td><select name="fin_{{ y }}_conf" class="conf-select" aria-label="{{ y }} confidence"><option value="">Default ({{ CONF['reported' if y <= last_actual else 'high'].short }})</option>{% for lv in CONF_LEVELS %}<option value="{{ lv.id }}" {{ 'selected' if form.get('fin_' ~ y ~ '_conf') == lv.id }}>{{ lv.name }}</option>{% endfor %}</select></td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% for k, m in errors.items() if k.startswith('fin_') or k.startswith('alloc_') %}<div class="err">{{ m }}</div>{% endfor %}
+  </fieldset>
+
+  <fieldset><legend>Page sections</legend>
+    {{ section_fields(inputs) }}
+    <p class="small muted" style="margin:12px 0 0">Add, rename or remove sections under <a href="{{ url_for('admin_sections') }}">Page sections</a>.</p>
+  </fieldset>
+
+  <div><button class="btn" type="submit">{{ 'Save company' if co else 'Add company' }}</button></div>
+</form>
+{% if co %}
+<form method="post" action="{{ url_for('admin_company_delete', slug=co.slug) }}" style="margin:-30px 0 80px" onsubmit="return confirm('Delete {{ co.name|e }}, its financials and its page content?')"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button class="btn small outline" type="submit">Delete this company</button></form>
+{% endif %}
+<script src="{{ url_for('static', filename='js/admin-data.js') }}" defer></script>
+{% endblock %}

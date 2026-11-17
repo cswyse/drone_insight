@@ -1,0 +1,13 @@
+{% extends "admin/base.html" %}
+{% from "admin/_data_macros.html" import data_nav, section_fields %}
+{% block admin %}
+{{ data_nav('taxonomy') }}
+<div class="adm-title" style="padding-top:12px"><h1>{{ row.name }}</h1>
+  <span><a class="btn small outline" href="{{ view_url }}">View on dashboard</a> <a class="btn small outline" href="{{ url_for('admin_taxonomy') }}">Back to lists</a></span></div>
+<p class="muted">What you write here appears on the dashboard whenever someone filters to this {{ {'country': 'country', 'subsector': 'sub-sector', 'vertical': 'vertical'}[kind] }}.</p>
+<form method="post" class="adm-form">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <fieldset><legend>Page content</legend>{{ section_fields(inputs) }}</fieldset>
+  <div><button class="btn" type="submit">Save</button></div>
+</form>
+{% endblock %}

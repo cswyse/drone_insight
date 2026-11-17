@@ -14,6 +14,8 @@ from flask import (Flask, g, Response, abort, flash, jsonify, redirect, render_t
 import config as cfg
 import content
 import data as d
+import dataio
+import datamgr
 import db
 import members
 import richtext
@@ -55,8 +57,10 @@ SECTION_SINGULAR = {"news": "news article", "papers": "white paper", "reports": 
 def post_to_news(p):
     m = p["meta"]
     return {"id": p["id"], "slug": p["slug"], "date": p["date"], "headline": p["title"], "summary": p["summary"],
-            "type": m.get("type") or "Market", "company": m.get("company") or None, "country": m.get("country") or None,
-            "subsector": m.get("subsector") or None, "vertical": m.get("vertical") or None,
+            "type": m.get("type") or "Market", "company": m.get("company") if m.get("company") in d.STORE.companies else None,
+            "country": m.get("country") if m.get("country") in d.COUNTRY else None,
+            "subsector": m.get("subsector") if m.get("subsector") in d.SUB else None,
+            "vertical": m.get("vertical") if m.get("vertical") in d.VERT else None,
             "impact": m.get("impact") or "neutral", "source": m.get("source") or p.get("author") or "", "cover": p["cover"]}
 
 
@@ -64,9 +68,25 @@ def refresh_news():
     d.set_news([post_to_news(p) for p in db.list_posts("news")])
 
 
+def reload_all():
+    d.reload()
+    refresh_news()
+
+
 db.init()
+dataio.ensure_seeded()
+d.reload()
 seed.run()
 refresh_news()
+_loaded = {"v": db.version()}
+
+
+@app.before_request
+def sync_workers():
+    """When data or content changed (in this or another worker), rebuild the in-memory copy."""
+    if request.endpoint != "static" and db.version() != _loaded["v"]:
+        _loaded["v"] = db.version()
+        reload_all()
 
 
 # ----------------------------------------------------------------------
@@ -115,7 +135,7 @@ def is_admin():
 app.jinja_env.globals.update(
     fmt_bn=fmt_bn, fmt_m=fmt_m, fmt_pct=fmt_pct, fmt_date=fmt_date, money=money,
     COUNTRY=d.COUNTRY, SUB=d.SUB, VERT=d.VERT, companies_all=d.STORE.companies, NEWS_TYPES=cfg.NEWS_TYPES,
-    csrf_token=csrf_token, is_admin=is_admin, FLAG_CODE={"uk": "gb"},
+    csrf_token=csrf_token, is_admin=is_admin, CONF=dataio.LEVEL, CONF_LEVELS=dataio.LEVELS,
 )
 
 
@@ -123,7 +143,10 @@ app.jinja_env.globals.update(
 def inject():
     s = settings.load()
     return {"brand": s["brand"], "theme_v": settings.version(), "fonts_url": s["theme"]["google_fonts_url"],
-            "nav_active": request.endpoint, "today": fmt_date(cfg.TODAY, long=True), "year_now": cfg.ESTIMATE_YEAR}
+            "nav_active": request.endpoint, "hidden": dataio.hidden_blocks(), "sample_notice": db.get_meta("sample_notice", "1") == "1", "today": fmt_date(cfg.TODAY, long=True), "year_now": cfg.ESTIMATE_YEAR, "CONF": dataio.LEVEL, "CONF_LEVELS": dataio.LEVELS}
+
+
+app.jinja_env.filters["md"] = richtext.render
 
 
 def get_filters(args=None):
@@ -235,7 +258,10 @@ def dashboard():
     chart_bars = [{"year": y, "value": round(v, 2), "status": d.year_status(y)} for y, v in zip(d.YEARS, total)]
     title = " · ".join(d.DIM_LOOKUP[k][v]["name"] for k, v in f.items()) if f else "Global market"
 
-    return render_template("dashboard.html", f=f, view=view, rows=rows, summ=summ, news=news, heat=heat,
+    blocks = [{"kind": dim, "name": d.DIM_LOOKUP[dim][f[dim]]["name"], **d.section_blocks(dim, f[dim])} for dim in ("country", "subsector", "vertical") if dim in f]
+    blocks = [b for b in blocks if b["facts"] or b["top"] or b["bottom"]]
+    summ["conf"] = d.market_confidence(f)
+    return render_template("dashboard.html", f=f, view=view, rows=rows, summ=summ, news=news, heat=heat, blocks=blocks,
                            crumbs=crumbs, title=title, unit=unit, years=d.YEARS,
                            chart_lines=chart_lines, chart_bars=chart_bars,
                            n_companies=len(d.breakdown("company", f)[0]), news_params=dict(f),
@@ -249,8 +275,8 @@ def company(slug):
     if not co:
         abort(404)
     f = get_filters()
-    fin = d.STORE.fin[slug]
-    latest, prev = fin[-1], fin[-2]
+    fin = d.STORE.fin.get(slug, [])
+    latest, prev = d.last_fin(slug), d.prev_fin(slug)
     slice_info = None
     if f:
         mkt = d.market_series(f)
@@ -260,11 +286,13 @@ def company(slug):
                       "cagr": d.cagr(cs[0], cs[d.IDX2026], d.IDX2026),
                       "label": " · ".join(d.DIM_LOOKUP[k][v]["name"] for k, v in f.items())}
     chart_rev = [{"year": r["year"], "value": round(r["revenue"], 1), "status": r["status"]} for r in fin]
-    chart_margin = [{"year": r["year"], "value": round(r["ebitda_margin"] * 100, 2), "status": r["status"]} for r in fin]
+    chart_margin = [{"year": r["year"], "value": round(r["ebitda_margin"] * 100, 2), "status": r["status"]} for r in fin
+                    if r["ebitda_margin"] is not None]
     back = url_for("dashboard", **f, view="company") if f else url_for("dashboard", view="company")
     return render_template("company.html", co=co, fin=fin, latest=latest, prev=prev,
                            bd=d.company_breakdowns(slug), news=d.company_news(slug, 6), peers=d.peers(slug),
-                           chart_rev=chart_rev, chart_margin=chart_margin, slice_info=slice_info, f=f, back=back)
+                           chart_rev=chart_rev, chart_margin=chart_margin, slice_info=slice_info, f=f, back=back,
+                           blocks=d.section_blocks("company", slug))
 
 
 # ---- News -------------------------------------------------------------
@@ -403,9 +431,8 @@ def api_news():
 def api_company(slug):
     if slug not in d.STORE.companies:
         abort(404)
-    hidden = ("scale", "drift", "margin0", "margin_trend", "rev_per_emp", "multiple", "capex", "gm_gap")
-    co = {k: v for k, v in d.STORE.companies[slug].items() if k not in hidden}
-    return jsonify({"company": co, "financials": d.STORE.fin[slug]})
+    co = {k: v for k, v in d.STORE.companies[slug].items() if k not in ("alloc", "has_split")}
+    return jsonify({"company": co, "financials": d.STORE.fin.get(slug, [])})
 
 
 @app.errorhandler(404)
@@ -735,6 +762,7 @@ def admin_orders():
 
 
 members.register(app, admin_required, paginate, is_admin)
+datamgr.register(app, admin_required, paginate)
 
 
 if __name__ == "__main__":

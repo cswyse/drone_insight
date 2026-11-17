@@ -1,0 +1,21 @@
+{% macro section_fields(inputs) %}
+{% for s in inputs %}
+<div class="field"><label for="sec_{{ s.id }}">{{ s.title }}</label>
+  {% if s.kind == 'fact' %}<input type="text" id="sec_{{ s.id }}" name="sec_{{ s.id }}" value="{{ s.value }}">
+  {% else %}<textarea id="sec_{{ s.id }}" name="sec_{{ s.id }}" rows="{{ 5 if s.kind == 'text' else 4 }}"{% if s.kind == 'links' %} placeholder="Website | https://example.com"{% endif %}>{{ s.value }}</textarea>{% endif %}
+  <span class="hint">{% if s.kind == 'text' %}Paragraphs. Markdown works.{% elif s.kind == 'list' %}One item per line.{% elif s.kind == 'links' %}One link per line, as Label | https://example.com{% else %}One line, shown in the About box. A web address becomes a link.{% endif %}
+  {% if not s.visible %} This section is switched off, so it is not shown on the page.{% endif %}</span></div>
+{% else %}
+<p class="muted" style="margin:0">No extra sections are set up for this page type. <a href="{{ url_for('admin_sections') }}">Add one</a>.</p>
+{% endfor %}
+{% endmacro %}
+
+{% macro data_nav(active) %}
+<nav class="filter-links" style="padding-top:22px" aria-label="Dashboard data">
+  <a href="{{ url_for('admin_data') }}" class="{{ 'on' if active == 'hub' }}">Overview</a>
+  <a href="{{ url_for('admin_taxonomy') }}" class="{{ 'on' if active == 'taxonomy' }}">Countries, sub-sectors, verticals</a>
+  <a href="{{ url_for('admin_market') }}" class="{{ 'on' if active == 'market' }}">Market sizing</a>
+  <a href="{{ url_for('admin_companies') }}" class="{{ 'on' if active == 'companies' }}">Companies</a>
+  <a href="{{ url_for('admin_sections') }}" class="{{ 'on' if active == 'sections' }}">Page sections</a>
+</nav>
+{% endmacro %}

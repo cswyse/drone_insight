@@ -57,3 +57,18 @@ VERTICALS = [
 ]
 
 NEWS_TYPES = ["Earnings", "M&A", "Partnership", "Product launch", "Expansion", "Leadership", "Investment", "Market"]
+
+
+# Confidence levels for the figures on the dashboard, from most to least certain. You can rename the
+# labels and rewrite the descriptions freely; keep the four ids (the code refers to them).
+CONFIDENCE = [
+    {"id": "reported", "name": "Reported", "short": "Reported",
+     "desc": "Actual figures from filings, audited accounts or an official statistic."},
+    {"id": "high", "name": "High-confidence estimate", "short": "High",
+     "desc": "Estimate built on solid evidence, such as company guidance or several consistent sources."},
+    {"id": "medium", "name": "Medium-confidence estimate", "short": "Medium",
+     "desc": "Estimate based on partial data or reasonable assumptions."},
+    {"id": "low", "name": "Low-confidence estimate", "short": "Low",
+     "desc": "Rough estimate with limited evidence. Treat as indicative."},
+]
+CONFIDENCE_DEFAULT_MARKET = "medium"   # used for market sizes with no level set

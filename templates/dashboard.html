@@ -1,9 +1,10 @@
 {% extends "base.html" %}
-{% from "_macros.html" import news_compact, flag %}
+{% from "_macros.html" import news_compact, flag, facts_rows, section_cards, conf, conf_key %}
 {% block title %}Dashboard: {{ title }} | {{ brand.name }}{% endblock %}
 {% set dec = 0 if summ.size >= 100 else (1 if summ.size >= 10 else 2) %}
 {% set view_names = {'country': 'countries', 'subsector': 'sub-sectors', 'vertical': 'verticals', 'company': 'companies'} %}
 {% block content %}
+<div id="dash-root">
 {% set maxshare = (rows|map(attribute='share')|max) if rows else 1 %}
 <section class="dash-head">
   <div class="wrap">
@@ -20,13 +21,14 @@
 
 <div class="wrap" style="padding-bottom:64px">
   <div class="kpis">
-    <div class="kpi"><div class="label">Market size {{ year_now }}E</div><div class="value">US${{ fmt_bn(summ.size, dec) }} bn</div><div class="sub">{{ fmt_pct(summ.yoy, 1, true) }} on {{ year_now - 1 }}</div></div>
+    <div class="kpi"><div class="label">Market size {{ year_now }}E</div><div class="value">US${{ fmt_bn(summ.size, dec) }} bn</div><div class="sub">{{ fmt_pct(summ.yoy, 1, true) }} on {{ year_now - 1 }}{% if summ.conf %} &middot; {{ conf(summ.conf) }}{% endif %}</div></div>
     <div class="kpi"><div class="label">Growth {{ years[0] }} to {{ year_now }} (CAGR)</div><div class="value">{{ fmt_pct(summ.cagr_hist) }}</div><div class="sub">Actual and estimate</div></div>
     <div class="kpi"><div class="label">Forecast to {{ years[-1] }} (CAGR)</div><div class="value">{{ fmt_pct(summ.cagr_fc) }}</div><div class="sub">US${{ fmt_bn(summ.series[-1], dec) }} bn in {{ years[-1] }}</div></div>
     <div class="kpi"><div class="label">Companies active</div><div class="value">{{ n_companies }}</div><div class="sub">of {{ companies_all|length }} tracked</div></div>
   </div>
 
-  <div class="dash-grid">
+  <div class="dash-grid" style="{{ 'grid-template-columns:1fr;' if 'dashboard.news' in hidden or 'dashboard.chart' in hidden }}">
+    {% if 'dashboard.chart' not in hidden %}
     <div class="card">
       <div class="panel-title"><h3>Market size, US$ bn</h3></div>
       <div class="panel-body">
@@ -34,58 +36,89 @@
         <script type="application/json" id="data-bars">{{ {'data': chart_bars, 'unit': 'US$ bn', 'dec': dec, 'label': 'Market size ' ~ title}|tojson }}</script>
       </div>
     </div>
+    {% endif %}
+    {% if 'dashboard.news' not in hidden %}
     <div class="card">
       <div class="panel-title"><h3>Latest news</h3><a class="small" href="{{ url_for('news_list', **news_params) }}">All news</a></div>
       <div class="panel-body" style="max-height:392px;overflow:auto">
         {% for n in news %}{{ news_compact(n) }}{% else %}<div class="empty">No news for this selection yet.</div>{% endfor %}
       </div>
     </div>
+    {% endif %}
   </div>
 
+  {% for b in blocks %}
+  {% if b.facts or b.top %}
   <div class="card" style="margin-top:24px">
-    <div class="panel-title"><h3>Break down by</h3><span class="small muted">Click a row to filter</span></div>
+    <div class="panel-title"><h3>{% if b.kind == 'country' %}{{ flag(f.country) }}{% endif %}{{ b.name }}</h3></div>
+    <div class="panel-body">
+      {% if b.facts %}<dl class="dl">{{ facts_rows(b.facts) }}</dl>{% endif %}
+      {% for s in b.top %}<div class="prose-sm" style="{{ 'margin-top:16px' if b.facts or not loop.first }}">{% if b.top|length > 1 or b.facts %}<h4 class="sec-h">{{ s.title }}</h4>{% endif %}{{ s.html }}</div>{% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  {% endfor %}
+
+  <div class="card" id="breakdown" style="margin-top:24px">
+    <div class="panel-title"><h3>Break down by</h3><span><a href="{{ url_for('dashboard', view=view) }}" class="small tbl-reset" data-active="{{ 1 if f else 0 }}"{% if not f %} hidden{% endif %}>Reset filters</a> <span class="small muted" style="margin-left:10px">Click a row to filter</span></span></div>
     <div class="tabs" role="tablist" style="margin-top:10px">
       {% for key, label in tabs %}
         {% set locked = key != 'company' and key in f %}
         <a role="tab" href="{{ url_for('dashboard', view=key, **f) }}" class="{{ 'on' if view == key }} {{ 'off' if locked }}" {% if locked %}aria-disabled="true" title="Already filtered"{% endif %}>{{ label }}</a>
       {% endfor %}
     </div>
+    {% if rows|length > 8 %}
+    <div class="tbl-tools">
+      <input type="search" class="tbl-search" placeholder="Search {{ view_names[view] }}" aria-label="Search {{ view_names[view] }}" autocomplete="off">
+      <span class="small muted tbl-count" aria-live="polite"></span>
+    </div>
+    {% endif %}
     <div class="panel-body table-scroll">
       {% if rows %}
-      <table class="data">
+      <table class="data sortable" data-per="{{ 25 }}">
         <thead>
           {% if view == 'company' %}
-          <tr><th>Company</th><th>HQ</th><th>Revenue in selection {{ year_now }}E (US$ m)</th><th>Market share</th><th>CAGR {{ years[0] }}-{{ year_now - 2000 }}</th><th>EBITDA margin</th></tr>
+          <tr><th data-sort="text">Company</th><th data-sort="text">HQ</th><th data-sort="num">Revenue in selection {{ year_now }}E (US$ m)</th><th data-sort="num">Market share</th><th data-sort="num">CAGR {{ years[0] }}-{{ year_now - 2000 }}</th><th data-sort="num">EBITDA margin</th><th data-sort="num">Confidence</th></tr>
           {% else %}
-          <tr><th>{{ {'country': 'Country', 'subsector': 'Sub-sector', 'vertical': 'Vertical'}[view] }}</th><th>{{ year_now }}E (US$ bn)</th><th>Share of selection</th><th>YoY</th><th>CAGR {{ years[0] }}-{{ year_now - 2000 }}</th><th>CAGR {{ year_now - 2000 }}-{{ years[-1] - 2000 }}F</th></tr>
+          <tr><th data-sort="text">{{ {'country': 'Country', 'subsector': 'Sub-sector', 'vertical': 'Vertical'}[view] }}</th><th data-sort="num">{{ year_now }}E (US$ bn)</th><th data-sort="num">Share of selection</th><th data-sort="num">YoY</th><th data-sort="num">CAGR {{ years[0] }}-{{ year_now - 2000 }}</th><th data-sort="num">CAGR {{ year_now - 2000 }}-{{ years[-1] - 2000 }}F</th><th data-sort="num">Confidence</th></tr>
           {% endif %}
         </thead>
         <tbody>
         {% for r in rows %}
-          <tr class="click" data-href="{{ r.url }}">
-            <td class="name"><a href="{{ r.url }}">{% if view == 'country' %}{{ flag(r.id) }}{% endif %}{{ r.name }}</a>{% if view == 'company' %}<div class="small muted">{{ r.ownership }}</div>{% elif r.region %}<div class="small muted">{{ r.region }}</div>{% endif %}</td>
+          <tr class="click" data-href="{{ r.url }}" data-q="{{ (r.name ~ ' ' ~ (r.hq or '') ~ ' ' ~ (r.region or '') ~ ' ' ~ (r.ownership or ''))|lower }}">
+            <td class="name" data-v="{{ r.name }}"><a href="{{ r.url }}">{% if view == 'country' %}{{ flag(r.id) }}{% endif %}{{ r.name }}</a>{% if view == 'company' %}<div class="small muted">{{ r.ownership }}</div>{% elif r.region %}<div class="small muted">{{ r.region }}</div>{% endif %}</td>
             {% if view == 'company' %}
-              <td>{{ r.hq }}</td>
-              <td>{{ '{:,.0f}'.format(r.size) }}</td>
-              <td><span class="sharebar"><i style="width:{{ r.share / maxshare * 100 }}%"></i></span>{{ fmt_pct(r.share) }}</td>
-              <td>{{ fmt_pct(r.cagr_hist) }}</td>
-              <td>{{ fmt_pct(r.ebitda_margin) }}</td>
+              <td data-v="{{ r.hq }}">{{ r.hq }}</td>
+              <td data-v="{{ r.size }}">{{ '{:,.0f}'.format(r.size) }}</td>
+              <td data-v="{{ r.share }}"><span class="sharebar"><i style="width:{{ r.share / maxshare * 100 }}%"></i></span>{{ fmt_pct(r.share) }}</td>
+              <td data-v="{{ r.cagr_hist if r.cagr_hist is not none }}">{{ fmt_pct(r.cagr_hist) }}</td>
+              <td data-v="{{ r.ebitda_margin if r.ebitda_margin is not none }}">{{ fmt_pct(r.ebitda_margin) }}</td>
+              <td data-v="{{ CONF[r.conf].score if r.conf }}">{{ conf(r.conf) }}</td>
             {% else %}
-              <td>{{ fmt_bn(r.size, dec if r.size >= 10 else 1) }}</td>
-              <td><span class="sharebar"><i style="width:{{ r.share / maxshare * 100 }}%"></i></span>{{ fmt_pct(r.share) }}</td>
-              <td>{{ fmt_pct(r.yoy, 1, true) }}</td>
-              <td>{{ fmt_pct(r.cagr_hist) }}</td>
-              <td>{{ fmt_pct(r.cagr_fc) }}</td>
+              <td data-v="{{ r.size }}">{{ fmt_bn(r.size, dec if r.size >= 10 else 1) }}</td>
+              <td data-v="{{ r.share }}"><span class="sharebar"><i style="width:{{ r.share / maxshare * 100 }}%"></i></span>{{ fmt_pct(r.share) }}</td>
+              <td data-v="{{ r.yoy if r.yoy is not none }}">{{ fmt_pct(r.yoy, 1, true) }}</td>
+              <td data-v="{{ r.cagr_hist if r.cagr_hist is not none }}">{{ fmt_pct(r.cagr_hist) }}</td>
+              <td data-v="{{ r.cagr_fc if r.cagr_fc is not none }}">{{ fmt_pct(r.cagr_fc) }}</td>
+              <td data-v="{{ CONF[r.conf].score if r.conf }}">{{ conf(r.conf) }}</td>
             {% endif %}
           </tr>
         {% endfor %}
         </tbody>
       </table>
+      <div class="empty tbl-none" hidden>Nothing matches your search.</div>
       {% else %}<div class="empty">No data for this selection.</div>{% endif %}
     </div>
+    {% if rows|length > 25 %}
+    <nav class="pager-min tbl-pager" aria-label="Pagination" style="margin:0 22px 18px"><a href="#" class="tp-prev">Previous</a><span class="where"></span><a href="#" class="tp-next">Next</a></nav>
+    {% endif %}
   </div>
 
-  <div class="dash-grid even">
+  {% set show_trend = 'dashboard.trend' not in hidden and chart_lines %}
+  {% set show_heat = 'dashboard.heatmap' not in hidden and heat %}
+  {% if show_trend or show_heat %}
+  <div class="dash-grid even" style="{{ 'grid-template-columns:1fr' if not (show_trend and show_heat) }}">
+    {% if show_trend %}
     <div class="card">
       <div class="panel-title"><h3>Top {{ chart_lines|length }} {{ view_names[view] }} over time</h3></div>
       <div class="panel-body">
@@ -93,6 +126,8 @@
         <script type="application/json" id="data-lines">{{ {'years': years, 'series': chart_lines, 'unit': unit, 'dec': 0 if view == 'company' else dec, 'forecastFrom': years[years.index(year_now) + 1], 'label': 'Top ' ~ view_names[view] ~ ' over time'}|tojson }}</script>
       </div>
     </div>
+    {% endif %}
+    {% if show_heat %}
     <div class="card">
       <div class="panel-title"><h3>Sub-sector by vertical, US$ bn</h3><span class="small muted">Click a cell to filter both</span></div>
       <div class="panel-body table-scroll">
@@ -108,7 +143,16 @@
         </div>
       </div>
     </div>
+    {% endif %}
   </div>
-  <p class="small muted" style="margin-top:18px">Sample data. {{ year_now }} is estimated; {{ year_now + 1 }} onward are forecasts. Company figures show revenue earned within the current selection.</p>
+  {% endif %}
+  {% for b in blocks %}{% if b.bottom %}
+  <div class="card" style="margin-top:24px"><div class="panel-title"><h3>{{ b.name }}</h3></div><div class="panel-body">
+    {% for s in b.bottom %}<div class="prose-sm" style="{{ 'margin-top:16px' if not loop.first }}"><h4 class="sec-h">{{ s.title }}</h4>{{ s.html }}</div>{% endfor %}
+  </div></div>
+  {% endif %}{% endfor %}
+  <p class="small muted" style="margin-top:18px">{{ year_now }} is estimated; {{ year_now + 1 }} onward are forecasts. Company figures show revenue earned within the current selection.</p>
+  {{ conf_key() }}
+</div>
 </div>
 {% endblock %}

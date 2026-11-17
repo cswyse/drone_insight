@@ -1,0 +1,600 @@
+"""Admin screens for the dashboard's own data: taxonomy, market sizes, companies, financials and page sections."""
+import csv
+import io
+import json
+import re
+
+from flask import Response, abort, flash, redirect, render_template, request, url_for
+
+import config as cfg
+import data as d
+import dataio
+import db
+
+YEARS = cfg.YEARS
+FLAG_RE = re.compile(r"^[a-z]{2}(-[a-z0-9]{2,3})?$")
+MAX_CSV = 2 * 1024 * 1024
+FIN_FIELDS = ["revenue", "gross_margin", "ebitda", "net_income", "capex", "employees"]
+
+
+def _num(text, label, errors, key, minimum=0.0):
+    try:
+        v = dataio.parse_num(text)
+    except ValueError:
+        errors[key] = f"{label}: enter a number."
+        return None
+    if v is not None and minimum is not None and v < minimum:
+        errors[key] = f"{label}: cannot be negative."
+        return None
+    return v
+
+
+def _csv_text(file):
+    raw = file.read(MAX_CSV + 1)
+    if len(raw) > MAX_CSV:
+        raise ValueError("The file is larger than 2 MB.")
+    try:
+        return raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return raw.decode("latin-1")
+
+
+def _safe(v):
+    v = "" if v is None else str(v)
+    return "'" + v if v[:1] in ("=", "+", "-", "@") else v
+
+
+def _lookup(kind, text):
+    """Find a country/sub-sector/vertical by name or id (ignoring case)."""
+    t = (text or "").strip().casefold()
+    for r in d.DIM_LOOKUP[kind].values():
+        if t in (r["id"].casefold(), r["name"].casefold()):
+            return r["id"]
+    return None
+
+
+def register(app, admin_required, paginate):
+    # ------------------------------------------------------------------
+    # Hub
+    # ------------------------------------------------------------------
+    @app.route("/admin/data")
+    @admin_required
+    def admin_data():
+        nc, ns, nv = len(d.COUNTRY), len(d.SUB), len(d.VERT)
+        stats = {"countries": nc, "subsectors": ns, "verticals": nv, "cells": len(d.STORE.market), "cells_possible": nc * ns * nv,
+                 "companies": len(d.STORE.companies), "no_split": len([c for c in d.STORE.companies.values() if not c["has_split"]]),
+                 "no_fin": len([s for s in d.STORE.companies if not d.STORE.fin.get(s)]),
+                 "sections": len(d.SECTIONS["defs"])}
+        return render_template("admin/data_index.html", stats=stats, years=YEARS, section="data")
+
+    # ------------------------------------------------------------------
+    # Taxonomy
+    # ------------------------------------------------------------------
+    @app.route("/admin/data/taxonomy", methods=["GET", "POST"])
+    @admin_required
+    def admin_taxonomy():
+        if request.method == "POST":
+            f = request.form
+            problems, saved = [], 0
+            for kind in dataio.DIM_KINDS:
+                existing = list(d.DIM_LOOKUP[kind].values())
+                rows, taken = [], {r["id"] for r in existing}
+                for r in existing:
+                    p = f"{kind}__{r['id']}__"
+                    name = (f.get(p + "name") or "").strip()
+                    if not name:
+                        problems.append(f"A {kind} name was empty, so it was left as {r['name']}.")
+                        name = r["name"]
+                    row = {k: v for k, v in r.items() if k not in ("id", "name", "sort")}
+                    row.update(id=r["id"], name=name[:80])
+                    try:
+                        row["sort"] = int(f.get(p + "sort") or 0)
+                    except ValueError:
+                        row["sort"] = r.get("sort", 0)
+                    if kind == "country":
+                        for k in ("region", "city", "exchange"):
+                            row[k] = (f.get(p + k) or "").strip()[:60]
+                        fl = (f.get(p + "flag") or "").strip().lower()
+                        row["flag"] = fl if FLAG_RE.match(fl) else ""
+                        if fl and not FLAG_RE.match(fl):
+                            problems.append(f"{name}: the flag code must be like gb or us.")
+                    rows.append(row)
+                for i in range(3):
+                    name = (f.get(f"new_{kind}_{i}_name") or "").strip()
+                    if not name:
+                        continue
+                    nid = dataio.unique_id(name, taken)
+                    taken.add(nid)
+                    row = {"id": nid, "name": name[:80], "sort": 1000 + i}
+                    if kind == "country":
+                        fl = (f.get(f"new_{kind}_{i}_flag") or "").strip().lower()
+                        row.update(region=(f.get(f"new_{kind}_{i}_region") or "").strip()[:60], city="", exchange="",
+                                   flag=fl if FLAG_RE.match(fl) else "")
+                    rows.append(row)
+                    saved += 1
+                rows.sort(key=lambda r: (r.get("sort", 0), r["name"].lower()))
+                for i, r in enumerate(rows):
+                    r["sort"] = i
+                dataio.save_dims(kind, rows)
+            for p in problems[:5]:
+                flash(p, "error")
+            flash("Saved." + (f" Added {saved}." if saved else ""), "ok")
+            return redirect(url_for("admin_taxonomy"))
+        return render_template("admin/data_taxonomy.html", kinds=[("country", "Countries", d.COUNTRY), ("subsector", "Sub-sectors", d.SUB), ("vertical", "Verticals", d.VERT)],
+                               section="data")
+
+    @app.route("/admin/data/taxonomy/<kind>/<dim_id>/delete", methods=["POST"])
+    @admin_required
+    def admin_taxonomy_delete(kind, dim_id):
+        if kind not in dataio.DIM_KINDS or dim_id not in d.DIM_LOOKUP[kind]:
+            abort(404)
+        name = d.DIM_LOOKUP[kind][dim_id]["name"]
+        dataio.delete_dim(kind, dim_id)
+        flash(f"Deleted {name} and its market data.", "ok")
+        return redirect(url_for("admin_taxonomy"))
+
+    # ------------------------------------------------------------------
+    # Page content for a country / sub-sector / vertical
+    # ------------------------------------------------------------------
+    def _section_inputs(entity, ent_id):
+        vals = d.SECTIONS["values"].get(ent_id, {})
+        return [{**s, "value": vals.get(s["id"], "")} for s in d.SECTIONS["defs"] if s["entity"] == entity]
+
+    def _read_section_values(entity):
+        return {s["id"]: (request.form.get("sec_" + s["id"]) or "")[:20000] for s in d.SECTIONS["defs"] if s["entity"] == entity}
+
+    @app.route("/admin/data/page/<kind>/<dim_id>", methods=["GET", "POST"])
+    @admin_required
+    def admin_dim_page(kind, dim_id):
+        if kind not in dataio.DIM_KINDS or dim_id not in d.DIM_LOOKUP[kind]:
+            abort(404)
+        row = d.DIM_LOOKUP[kind][dim_id]
+        if request.method == "POST":
+            dataio.save_values(kind, dim_id, _read_section_values(kind))
+            flash("Saved.", "ok")
+            return redirect(url_for("admin_dim_page", kind=kind, dim_id=dim_id))
+        return render_template("admin/data_dim.html", kind=kind, row=row, inputs=_section_inputs(kind, dim_id),
+                               view_url=url_for("dashboard", **{kind: dim_id}), section="data")
+
+    # ------------------------------------------------------------------
+    # Market sizing
+    # ------------------------------------------------------------------
+    @app.route("/admin/data/market", methods=["GET", "POST"])
+    @admin_required
+    def admin_market():
+        if not (d.COUNTRY and d.SUB and d.VERT):
+            flash("Add at least one country, sub-sector and vertical first.", "error")
+            return redirect(url_for("admin_taxonomy"))
+        cid = request.values.get("country")
+        if cid not in d.COUNTRY:
+            cid = next(iter(d.COUNTRY))
+        errors, form = {}, {}
+        if request.method == "POST":
+            form = request.form.to_dict()
+            cells, confs, n_set, n_clear = {}, {}, 0, 0
+            for s in d.SUB:
+                for v in d.VERT:
+                    raw, bad = [], False
+                    for y in YEARS:
+                        key = f"m|{s}|{v}|{y}"
+                        try:
+                            val = dataio.parse_num(form.get(key))
+                        except ValueError:
+                            errors[key] = "Enter a number."
+                            bad = True
+                            val = None
+                        if val is not None and val < 0:
+                            errors[key] = "No negatives."
+                            bad = True
+                        raw.append(val)
+                    if bad:
+                        continue
+                    try:
+                        g = dataio.parse_num(form.get(f"g|{s}|{v}"))
+                    except ValueError:
+                        errors[f"g|{s}|{v}"] = "Enter a percentage."
+                        continue
+                    series = dataio.fill_series(raw, None if g is None else g / 100.0, len(YEARS))
+                    if series is None:
+                        if (cid, s, v) in d.STORE.market:
+                            n_clear += 1
+                        cells[(cid, s, v)] = None
+                    else:
+                        cells[(cid, s, v)] = series
+                        confs[(cid, s, v)] = form.get(f"c|{s}|{v}") if form.get(f"c|{s}|{v}") in dataio.LEVEL else None
+                        n_set += 1
+            if errors:
+                flash("Some values are not numbers. They are marked below, and nothing was saved.", "error")
+            else:
+                dataio.save_market(cells, confs)
+                flash(f"Saved {d.COUNTRY[cid]['name']}: {n_set} row{'' if n_set == 1 else 's'} with data" + (f", {n_clear} cleared." if n_clear else "."), "ok")
+                return redirect(url_for("admin_market", country=cid))
+        grid = []
+        for s in d.SUB.values():
+            for v in d.VERT.values():
+                vals = d.STORE.market.get((cid, s["id"], v["id"]))
+                row = {"s": s, "v": v, "cells": []}
+                for i, y in enumerate(YEARS):
+                    key = f"m|{s['id']}|{v['id']}|{y}"
+                    row["cells"].append({"key": key, "value": form[key] if key in form else ("" if vals is None else f"{vals[i]:.4g}" if vals[i] < 1 else f"{vals[i]:.1f}"), "err": errors.get(key)})
+                row["gkey"] = f"g|{s['id']}|{v['id']}"
+                row["g"] = form.get(row["gkey"], "")
+                row["ckey"] = f"c|{s['id']}|{v['id']}"
+                row["conf"] = form.get(row["ckey"], d.STORE.market_conf.get((cid, s["id"], v["id"])) or "")
+                grid.append(row)
+        return render_template("admin/data_market.html", config_default=cfg.CONFIDENCE_DEFAULT_MARKET, cid=cid, grid=grid, years=YEARS, section="data", errors=errors)
+
+    @app.route("/admin/data/market.csv")
+    @admin_required
+    def admin_market_csv():
+        out = io.StringIO()
+        w = csv.writer(out)
+        w.writerow(["country", "sub-sector", "vertical", "confidence"] + YEARS)
+        for c in d.COUNTRY.values():
+            for s in d.SUB.values():
+                for v in d.VERT.values():
+                    vals = d.STORE.market.get((c["id"], s["id"], v["id"]))
+                    lvl = d.STORE.market_conf.get((c["id"], s["id"], v["id"]))
+                    w.writerow([_safe(c["name"]), _safe(s["name"]), _safe(v["name"]), dataio.LEVEL[lvl]["name"] if lvl else ""] + ([""] * len(YEARS) if vals is None else [round(x, 3) for x in vals]))
+        return Response(out.getvalue(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=market-sizes.csv"})
+
+    @app.route("/admin/data/market/import", methods=["POST"])
+    @admin_required
+    def admin_market_import():
+        f = request.files.get("file")
+        if not f or not f.filename:
+            flash("Choose a CSV file first.", "error")
+            return redirect(url_for("admin_market"))
+        try:
+            rows = list(csv.reader(io.StringIO(_csv_text(f))))
+        except ValueError as e:
+            flash(str(e), "error")
+            return redirect(url_for("admin_market"))
+        errors, cells, confs = [], {}, {}
+        if not rows:
+            errors.append("The file is empty.")
+        else:
+            head = [h.strip().lower().replace("-", "").replace(" ", "") for h in rows[0]]
+            ci = si = vi = None
+            ki = head.index("confidence") if "confidence" in head else None
+            yi = {}
+            try:
+                ci, si, vi = head.index("country"), head.index("subsector"), head.index("vertical")
+                yi = {y: head.index(str(y)) for y in YEARS if str(y) in head}
+            except ValueError:
+                errors.append("The first row must have the columns: country, sub-sector, vertical, then years such as 2021 to 2030.")
+            for n, r in enumerate(rows[1:] if not errors else [], start=2):
+                if not any(x.strip() for x in r):
+                    continue
+                if len(errors) >= 10:
+                    break
+                try:
+                    c, s, v = _lookup("country", r[ci]), _lookup("subsector", r[si]), _lookup("vertical", r[vi])
+                except IndexError:
+                    errors.append(f"Row {n} is too short.")
+                    continue
+                if not (c and s and v):
+                    errors.append(f"Row {n}: unknown {'country' if not c else 'sub-sector' if not s else 'vertical'} “{r[ci] if not c else r[si] if not s else r[vi]}”. Add it under Countries, sub-sectors and verticals first.")
+                    continue
+                try:
+                    raw = [dataio.parse_num(r[yi[y]]) if y in yi and yi[y] < len(r) else None for y in YEARS]
+                except ValueError:
+                    errors.append(f"Row {n}: a year value is not a number.")
+                    continue
+                if any(x is not None and x < 0 for x in raw):
+                    errors.append(f"Row {n}: values cannot be negative.")
+                    continue
+                cells[(c, s, v)] = dataio.fill_series(raw, None, len(YEARS))
+                if ki is not None and ki < len(r) and r[ki].strip():
+                    try:
+                        confs[(c, s, v)] = dataio.parse_level(r[ki])
+                    except ValueError:
+                        errors.append(f"Row {n}: unknown confidence “{r[ki].strip()}”. Use one of: " + ", ".join(lv["name"] for lv in dataio.LEVELS) + ".")
+        if errors:
+            flash("Nothing was imported. " + " ".join(errors[:10]), "error")
+            return redirect(url_for("admin_market"))
+        if request.form.get("mode") == "replace":
+            for key in list(d.STORE.market):
+                cells.setdefault(key, None)
+        dataio.save_market(cells, confs)
+        n = len([1 for v in cells.values() if v is not None])
+        flash(f"Imported {n} market rows.", "ok")
+        return redirect(url_for("admin_market"))
+
+    # ------------------------------------------------------------------
+    # Companies
+    # ------------------------------------------------------------------
+    @app.route("/admin/data/companies")
+    @admin_required
+    def admin_companies():
+        q = (request.args.get("q") or "").strip().lower()
+        show = request.args.get("show") or ""
+        rows = []
+        for slug, co in d.STORE.companies.items():
+            fin = d.STORE.fin.get(slug, [])
+            rows.append({**co, "n_fin": len(fin), "latest": fin[-1] if fin else None})
+        if q:
+            rows = [r for r in rows if q in r["name"].lower() or q in (r["ticker"] or "").lower()]
+        if show == "incomplete":
+            rows = [r for r in rows if not r["has_split"] or not r["n_fin"]]
+        rows.sort(key=lambda r: r["name"].lower())
+        items, page, pages = paginate(rows, 25)
+        return render_template("admin/data_companies.html", rows=items, total=len(rows), page=page, pages=pages, q=q, show=show,
+                               params={"q": q or None, "show": show or None}, section="data")
+
+    def _company_form(co, fin):
+        """Flat dict of string values for the company form."""
+        f = {"name": co.get("name", ""), "hq": co.get("hq", ""), "city": co.get("city", ""), "ownership": co.get("ownership", "Private"),
+             "ticker": co.get("ticker") or "", "exchange": co.get("exchange") or "", "founded": co.get("founded") or "",
+             "market_cap": co.get("market_cap") or "", "description": co.get("description", "")}
+        for dim in dataio.DIM_KINDS:
+            for k, v in (co.get("alloc", {}).get(dim, {}) or {}).items():
+                f[f"alloc_{dim}_{k}"] = f"{v:g}"
+        for r in fin:
+            f[f"fin_{r['year']}_revenue"] = f"{r['revenue']:.1f}" if r["revenue"] is not None else ""
+            f[f"fin_{r['year']}_gross_margin"] = f"{r['gross_margin'] * 100:.1f}" if r.get("gross_margin") is not None else ""
+            for k in ("ebitda", "net_income", "capex"):
+                f[f"fin_{r['year']}_{k}"] = f"{r[k]:.1f}" if r.get(k) is not None else ""
+            f[f"fin_{r['year']}_employees"] = str(r["employees"]) if r.get("employees") is not None else ""
+            f[f"fin_{r['year']}_conf"] = r.get("conf_raw") or ""
+        return f
+
+    @app.route("/admin/data/companies/new", methods=["GET", "POST"])
+    @app.route("/admin/data/companies/<slug>", methods=["GET", "POST"])
+    @admin_required
+    def admin_company(slug=None):
+        existing = d.STORE.companies.get(slug) if slug else None
+        if slug and not existing:
+            abort(404)
+        errors, form = {}, {}
+        if request.method == "POST":
+            form = request.form.to_dict()
+            name = (form.get("name") or "").strip()
+            if not name:
+                errors["name"] = "Enter the company name."
+            hq = form.get("hq") or ""
+            if hq and hq not in d.COUNTRY:
+                errors["hq"] = "Choose a country from the list."
+            founded = None
+            if (form.get("founded") or "").strip():
+                try:
+                    founded = int(form["founded"].strip())
+                    if not 1000 <= founded <= 2100:
+                        raise ValueError
+                except ValueError:
+                    errors["founded"] = "Enter a year such as 1998."
+            mcap = _num(form.get("market_cap"), "Market capitalisation", errors, "market_cap")
+            alloc = {}
+            for dim in dataio.DIM_KINDS:
+                alloc[dim] = {}
+                for k in d.DIM_LOOKUP[dim]:
+                    key = f"alloc_{dim}_{k}"
+                    v = _num(form.get(key), "Share", errors, key)
+                    if v:
+                        alloc[dim][k] = v
+                tot = sum(alloc[dim].values())
+                if tot > 0:
+                    alloc[dim] = {k: round(100 * v / tot, 2) for k, v in alloc[dim].items()}
+            fin_rows = []
+            for y in dataio.FIN_YEARS:
+                vals, any_val = {}, False
+                for k in FIN_FIELDS:
+                    key = f"fin_{y}_{k}"
+                    txt = (form.get(key) or "").strip()
+                    if txt:
+                        any_val = True
+                    v = _num(txt, f"{y} {k.replace('_', ' ')}", errors, key, minimum=(None if k in ("ebitda", "net_income") else 0.0))
+                    vals[k] = v
+                if any_val:
+                    if vals["revenue"] is None and f"fin_{y}_revenue" not in errors:
+                        errors[f"fin_{y}_revenue"] = f"Enter revenue for {y}, or clear the row."
+                    if vals["gross_margin"] is not None:
+                        vals["gross_margin"] = vals["gross_margin"] / 100.0
+                    if vals["employees"] is not None:
+                        vals["employees"] = int(vals["employees"])
+                    lvl = form.get(f"fin_{y}_conf")
+                    fin_rows.append({"year": y, **vals, "conf": lvl if lvl in dataio.LEVEL else None})
+            if not errors:
+                is_new = existing is None
+                taken = set(d.STORE.companies)
+                slug = slug or dataio.unique_id(name, taken)
+                data = {"hq": hq, "city": (form.get("city") or "").strip()[:80], "ownership": (form.get("ownership") or "Private").strip()[:60],
+                        "ticker": (form.get("ticker") or "").strip()[:12], "exchange": (form.get("exchange") or "").strip()[:20],
+                        "founded": founded, "market_cap": mcap, "description": (form.get("description") or "").strip()[:5000], "alloc": alloc}
+                dataio.save_company(slug, name[:120], data)
+                dataio.save_fin(slug, fin_rows)
+                dataio.save_values("company", slug, _read_section_values("company"))
+                flash(("Added " if is_new else "Saved ") + name + ".", "ok")
+                return redirect(url_for("admin_company", slug=slug))
+            flash("Some fields need attention. They are marked below, and nothing was saved.", "error")
+        if not form:
+            form = _company_form(existing or {}, d.STORE.fin.get(slug, []) if existing else [])
+        inputs = _section_inputs("company", slug) if slug else [{**s, "value": ""} for s in d.SECTIONS["defs"] if s["entity"] == "company"]
+        if request.method == "POST":
+            for i in inputs:
+                i["value"] = form.get("sec_" + i["id"], "")
+        sums = {dim: round(sum(float(form.get(f"alloc_{dim}_{k}") or 0) if re.match(r"^[0-9.]+$", form.get(f"alloc_{dim}_{k}") or "") else 0 for k in d.DIM_LOOKUP[dim]), 1) for dim in dataio.DIM_KINDS}
+        return render_template("admin/data_company.html", co=existing, form=form, errors=errors, inputs=inputs, fin_years=dataio.FIN_YEARS,
+                               ownership=dataio.OWNERSHIP, sums=sums, last_actual=cfg.LAST_ACTUAL, section="data")
+
+    @app.route("/admin/data/companies/<slug>/delete", methods=["POST"])
+    @admin_required
+    def admin_company_delete(slug):
+        co = d.STORE.companies.get(slug)
+        if not co:
+            abort(404)
+        dataio.delete_company(slug)
+        flash(f"Deleted {co['name']}.", "ok")
+        return redirect(url_for("admin_companies"))
+
+    @app.route("/admin/data/financials.csv")
+    @admin_required
+    def admin_fin_csv():
+        out = io.StringIO()
+        w = csv.writer(out)
+        w.writerow(["company", "year", "revenue", "gross_margin_pct", "ebitda", "net_income", "capex", "employees", "confidence"])
+        for slug, co in sorted(d.STORE.companies.items(), key=lambda kv: kv[1]["name"].lower()):
+            for r in d.STORE.fin.get(slug, []):
+                w.writerow([_safe(co["name"]), r["year"], *["" if r[k] is None else round(r[k], 1) for k in ("revenue",)],
+                            "" if r["gross_margin"] is None else round(r["gross_margin"] * 100, 1),
+                            *["" if r[k] is None else round(r[k], 1) for k in ("ebitda", "net_income", "capex")],
+                            "" if r["employees"] is None else r["employees"],
+                            dataio.LEVEL[r["conf"]]["name"]])
+        return Response(out.getvalue(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=company-financials.csv"})
+
+    @app.route("/admin/data/financials/import", methods=["POST"])
+    @admin_required
+    def admin_fin_import():
+        f = request.files.get("file")
+        if not f or not f.filename:
+            flash("Choose a CSV file first.", "error")
+            return redirect(url_for("admin_companies"))
+        try:
+            rows = list(csv.reader(io.StringIO(_csv_text(f))))
+        except ValueError as e:
+            flash(str(e), "error")
+            return redirect(url_for("admin_companies"))
+        errors, by_co = [], {}
+        head = [h.strip().lower() for h in rows[0]] if rows else []
+        need = ["company", "year", "revenue"]
+        if not rows or any(h not in head for h in need):
+            errors.append("The first row must include the columns company, year and revenue. Optional: gross_margin_pct, ebitda, net_income, capex, employees, confidence.")
+        else:
+            col = {h: head.index(h) for h in head}
+            by_name, dupes = {}, set()
+            for s_, c_ in d.STORE.companies.items():
+                k_ = c_["name"].casefold()
+                if k_ in by_name:
+                    dupes.add(k_)
+                by_name[k_] = s_
+            for n, r in enumerate(rows[1:], start=2):
+                if not any(x.strip() for x in r) or len(errors) >= 10:
+                    continue
+                get = lambda k: (r[col[k]] if k in col and col[k] < len(r) else "")
+                key = get("company").strip().casefold()
+                slug = key if key in d.STORE.companies else by_name.get(key)
+                if slug != key and key in dupes:
+                    errors.append(f"Row {n}: more than one company is called “{get('company').strip()}”. Use its id instead (see the web address of its edit page).")
+                    continue
+                if not slug:
+                    errors.append(f"Row {n}: company “{get('company').strip()}” does not exist. Add it under Companies first.")
+                    continue
+                try:
+                    year = int(float(get("year")))
+                    vals = {"year": year, "revenue": dataio.parse_num(get("revenue")), "gross_margin": dataio.parse_num(get("gross_margin_pct")),
+                            "ebitda": dataio.parse_num(get("ebitda")), "net_income": dataio.parse_num(get("net_income")),
+                            "capex": dataio.parse_num(get("capex")), "employees": dataio.parse_num(get("employees"))}
+                except ValueError:
+                    errors.append(f"Row {n}: a value is not a number.")
+                    continue
+                if year not in dataio.FIN_YEARS:
+                    errors.append(f"Row {n}: year must be between {dataio.FIN_YEARS[0]} and {dataio.FIN_YEARS[-1]}.")
+                    continue
+                if vals["revenue"] is None or vals["revenue"] < 0:
+                    errors.append(f"Row {n}: revenue is required and cannot be negative.")
+                    continue
+                if vals["gross_margin"] is not None:
+                    vals["gross_margin"] /= 100.0
+                if vals["employees"] is not None:
+                    vals["employees"] = int(vals["employees"])
+                if get("confidence").strip():
+                    try:
+                        vals["conf"] = dataio.parse_level(get("confidence"))
+                    except ValueError:
+                        errors.append(f"Row {n}: unknown confidence “{get('confidence').strip()}”. Use one of: " + ", ".join(lv["name"] for lv in dataio.LEVELS) + ".")
+                        continue
+                by_co.setdefault(slug, []).append(vals)
+        if errors:
+            flash("Nothing was imported. " + " ".join(errors), "error")
+            return redirect(url_for("admin_companies"))
+        for slug, rows_ in by_co.items():
+            dataio.save_fin(slug, rows_, replace=False)
+        flash(f"Imported {sum(len(v) for v in by_co.values())} financial rows for {len(by_co)} companies.", "ok")
+        return redirect(url_for("admin_companies"))
+
+    # ------------------------------------------------------------------
+    # Page sections
+    # ------------------------------------------------------------------
+    @app.route("/admin/data/sections", methods=["GET", "POST"])
+    @admin_required
+    def admin_sections():
+        if request.method == "POST":
+            f = request.form
+            kinds = {k for k, _, _ in dataio.KINDS}
+            with db.conn() as c:
+                taken = {r["id"] for r in c.execute("SELECT id FROM sections")}
+                for s in d.SECTIONS["defs"]:
+                    p = f"s_{s['id']}_"
+                    if p + "title" not in f:
+                        continue
+                    title = (f.get(p + "title") or "").strip() or s["title"]
+                    kind = f.get(p + "kind") if f.get(p + "kind") in kinds else s["kind"]
+                    pos = "bottom" if f.get(p + "position") == "bottom" else "top"
+                    try:
+                        sort = int(f.get(p + "sort") or 0)
+                    except ValueError:
+                        sort = s["sort"]
+                    c.execute("UPDATE sections SET title=?, kind=?, position=?, sort=?, visible=? WHERE id=?",
+                              (title[:80], kind, pos, sort, 1 if f.get(p + "visible") else 0, s["id"]))
+                added = 0
+                for ent, _ in dataio.ENTITIES:
+                    for i in range(2):
+                        title = (f.get(f"new_{ent}_{i}_title") or "").strip()
+                        if not title:
+                            continue
+                        kind = f.get(f"new_{ent}_{i}_kind") if f.get(f"new_{ent}_{i}_kind") in kinds else "text"
+                        sid = dataio.unique_id(f"{ent}-{title}", taken)
+                        taken.add(sid)
+                        c.execute("INSERT INTO sections (id, entity, title, kind, position, sort, visible) VALUES (?,?,?,?,?,?,1)",
+                                  (sid, ent, title[:80], kind, "top", 100 + i))
+                        added += 1
+                db.bump(c)
+            hidden = [f"{page}.{bid}" for page, blocks in dataio.BLOCKS.items() for bid, _ in blocks if not f.get(f"show_{page}.{bid}")]
+            db.set_meta("hidden_blocks", json.dumps(hidden))
+            db.bump()
+            flash("Saved." + (f" Added {added} section{'' if added == 1 else 's'}." if added else ""), "ok")
+            return redirect(url_for("admin_sections"))
+        groups = [(ent, label, [s for s in d.SECTIONS["defs"] if s["entity"] == ent]) for ent, label in dataio.ENTITIES]
+        return render_template("admin/data_sections.html", groups=groups, kinds=dataio.KINDS, blocks=dataio.BLOCKS, hidden=dataio.hidden_blocks(),
+                               section="data")
+
+    @app.route("/admin/data/sections/<sid>/delete", methods=["POST"])
+    @admin_required
+    def admin_section_delete(sid):
+        with db.conn() as c:
+            c.execute("DELETE FROM sections WHERE id=?", (sid,))
+            c.execute("DELETE FROM section_values WHERE section_id=?", (sid,))
+            db.bump(c)
+        flash("Section deleted, along with what was entered in it.", "ok")
+        return redirect(url_for("admin_sections"))
+
+    @app.route("/admin/data/notice", methods=["POST"])
+    @admin_required
+    def admin_data_notice():
+        db.set_meta("sample_notice", "1" if request.form.get("show") else "0")
+        flash("Saved.", "ok")
+        return redirect(url_for("admin_data"))
+
+    # ------------------------------------------------------------------
+    # Reset
+    # ------------------------------------------------------------------
+    @app.route("/admin/data/reset", methods=["POST"])
+    @admin_required
+    def admin_data_reset():
+        action = request.form.get("action")
+        if action == "clear":
+            with db.conn() as c:
+                c.execute("DELETE FROM market")
+                c.execute("DELETE FROM companies")
+                c.execute("DELETE FROM fin")
+                c.execute("DELETE FROM section_values")
+                db.bump(c)
+            dataio.scrub_all_company_news()
+            db.set_meta("sample_notice", "0")
+            flash("All market sizes, companies and financials were cleared. Countries, sub-sectors, verticals and sections were kept.", "ok")
+        elif action == "sample":
+            dataio.seed_sample()
+            flash("The sample dataset was restored.", "ok")
+        else:
+            abort(400)
+        return redirect(url_for("admin_data"))

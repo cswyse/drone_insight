@@ -1,0 +1,54 @@
+{% extends "admin/base.html" %}
+{% from "admin/_data_macros.html" import data_nav %}
+{% block admin %}
+{{ data_nav('hub') }}
+<div class="adm-title" style="padding-top:12px"><h1>Dashboard data</h1><a class="btn small outline" href="{{ url_for('dashboard') }}">Open the dashboard</a></div>
+<p class="muted" style="max-width:46em">Everything the dashboard shows is entered here. Work through the four steps in order. You can start from the sample data and change it, or clear it and start empty.</p>
+
+{% if stats.no_split or stats.no_fin %}
+<div class="warn">
+  {% if stats.no_split %}<b>{{ stats.no_split }}</b> compan{{ 'y has' if stats.no_split == 1 else 'ies have' }} no revenue split, so {{ 'it does' if stats.no_split == 1 else 'they do' }} not appear in dashboard tables.{% endif %}
+  {% if stats.no_fin %}<b>{{ stats.no_fin }}</b> compan{{ 'y has' if stats.no_fin == 1 else 'ies have' }} no financials. <a href="{{ url_for('admin_companies', show='incomplete') }}">See them</a>.{% endif %}
+</div>
+{% endif %}
+
+<div class="steps">
+  <div class="step"><b>1. Taxonomy</b><span class="muted small">The countries, sub-sectors and verticals the market is split into.</span>
+    <span class="small">{{ stats.countries }} countries, {{ stats.subsectors }} sub-sectors, {{ stats.verticals }} verticals</span>
+    <a class="btn small" href="{{ url_for('admin_taxonomy') }}">Edit lists</a></div>
+  <div class="step"><b>2. Market sizing</b><span class="muted small">Market size by year for each country, sub-sector and vertical.</span>
+    <span class="small">{{ stats.cells }} of {{ '{:,}'.format(stats.cells_possible) }} possible rows filled</span>
+    <a class="btn small" href="{{ url_for('admin_market') }}">Enter market sizes</a></div>
+  <div class="step"><b>3. Companies</b><span class="muted small">Profile, revenue split and financials for each company.</span>
+    <span class="small">{{ stats.companies }} compan{{ 'y' if stats.companies == 1 else 'ies' }}</span>
+    <a class="btn small" href="{{ url_for('admin_companies') }}">Manage companies</a></div>
+  <div class="step"><b>4. Page sections</b><span class="muted small">Add your own sections, such as Products or Website, to company and market pages.</span>
+    <span class="small">{{ stats.sections }} section{{ '' if stats.sections == 1 else 's' }} set up</span>
+    <a class="btn small" href="{{ url_for('admin_sections') }}">Edit sections</a></div>
+</div>
+
+<h3>How the numbers fit together</h3>
+<ul class="plain-list muted" style="max-width:48em">
+  <li>Market sizes are in US$ billions, one row per country, sub-sector and vertical. Leave years blank and they are filled in for you.</li>
+  <li>A company's revenue (US$ millions) comes from its financials. Its split by country, sub-sector and vertical decides which dashboard slices it appears in.</li>
+  <li>Years after your last reported revenue follow the growth of the markets the company sells into.</li>
+  <li>Years run {{ years[0] }} to {{ years[-1] }}. Company financials can be entered up to {{ year_now }}.</li>
+</ul>
+
+<form method="post" action="{{ url_for('admin_data_notice') }}" class="adm-form" style="margin-top:26px;padding-bottom:0">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <label class="checkrow"><input type="checkbox" name="show" value="1" {{ 'checked' if sample_notice }}><span>Show the “sample data” notice in the site footer. Turn this off once you have your own data.</span></label>
+  <div><button class="btn small outline" type="submit">Save</button></div>
+</form>
+
+<div class="danger-zone">
+  <h3 style="margin-top:0">Start over</h3>
+  <p class="muted">These replace data in bulk. Download your CSVs first if you want a copy.</p>
+  <form method="post" action="{{ url_for('admin_data_reset') }}" class="inline-form" onsubmit="return confirm('Delete every market size, company and financial figure? Countries, sub-sectors, verticals and sections are kept.')">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="clear">
+    <button class="btn small outline" type="submit">Clear all market sizes, companies and financials</button></form>
+  <form method="post" action="{{ url_for('admin_data_reset') }}" class="inline-form" onsubmit="return confirm('Replace ALL dashboard data, including your lists and sections, with the sample data?')">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="sample">
+    <button class="btn small outline" type="submit">Restore the sample data</button></form>
+</div>
+{% endblock %}

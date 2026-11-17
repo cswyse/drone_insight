@@ -6,6 +6,7 @@ import config as cfg
 import content
 import data as d
 import db
+import sample_data
 
 
 def _chart(kind, title, unit, header, rows, source="Meridian sample data"):
@@ -60,7 +61,7 @@ def SUB_NAME(sub):
 
 def seed_news():
     items = []
-    for n in d.STORE.seed_news:
+    for n in sample_data.get().seed_news:
         items.append({
             "title": n["headline"], "summary": n["summary"], "body": news_body(n), "date": str(n["date"]),
             "author": n["source"], "tags": [n["type"]], "status": "published",

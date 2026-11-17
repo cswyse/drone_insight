@@ -5,7 +5,7 @@
 {%- endmacro %}
 
 {% macro flag(cid) -%}
-  {%- if cid in COUNTRY %}<img class="flag" src="{{ url_for('static', filename='flags/' ~ FLAG_CODE.get(cid, cid) ~ '.svg') }}" alt="" width="20" height="15" loading="lazy" onerror="this.remove()">{% endif -%}
+  {%- if cid in COUNTRY %}<img class="flag" src="{{ url_for('static', filename='flags/' ~ (COUNTRY[cid].flag or cid) ~ '.svg') }}" alt="" width="20" height="15" loading="lazy" onerror="this.remove()">{% endif -%}
 {%- endmacro %}
 
 {% macro thumb(url) -%}{% if url %}<img class="thumb" src="{{ url }}" alt="" loading="lazy">{% endif %}{%- endmacro %}
@@ -50,3 +50,21 @@
 
 {% macro flashes() %}{% with msgs = get_flashed_messages(with_categories=true) %}{% for cat, m in msgs %}<div class="flash {{ cat }}" role="status">{{ m }}</div>{% endfor %}{% endwith %}{% endmacro %}
 {% macro fld(name, label, form, errors, type='text', ac='', req=False, hint='') %}<div class="field"><label for="{{ name }}">{{ label }}</label><input id="{{ name }}" name="{{ name }}" type="{{ type }}" value="{{ form.get(name, '') if type != 'password' else '' }}"{% if ac %} autocomplete="{{ ac }}"{% endif %}{% if req %} required{% endif %}>{% if hint %}<span class="hint">{{ hint }}</span>{% endif %}{% if errors.get(name) %}<div class="err">{{ errors[name] }}</div>{% endif %}</div>{% endmacro %}
+
+{# Cells for the company financial table: a dash when a figure was not entered #}
+{% macro n0(v) %}{{ '{:,.0f}'.format(v) if v is not none else '–' }}{% endmacro %}
+
+{# Custom sections as cards. Items come from data.section_blocks() #}
+{% macro section_cards(items) %}
+{% if items %}<div class="dash-grid even" style="margin-top:24px">{% for b in items %}
+  <div class="card"><div class="panel-title"><h3>{{ b.title }}</h3></div><div class="panel-body prose-sm">{{ b.html }}</div></div>
+{% endfor %}</div>{% endif %}
+{% endmacro %}
+
+{% macro facts_rows(items) %}{% for b in items %}<dt>{{ b.title }}</dt><dd>{{ b.html }}</dd>{% endfor %}{% endmacro %}
+
+{# Confidence indicator: four bars (filled by level) and the short name; the tooltip carries the full name and meaning #}
+{% macro conf(level) %}{% if level and level in CONF %}{% set lv = CONF[level] %}<span class="conf conf-{{ lv.score }}" title="{{ lv.name }}. {{ lv.desc }}"><span class="bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="conf-l">{{ lv.short }}</span></span>{% endif %}{% endmacro %}
+
+{# Key to the confidence levels #}
+{% macro conf_key() %}<div class="conf-key small muted"><b>Confidence</b>{% for lv in CONF_LEVELS %}<span class="conf conf-{{ lv.score }}" title="{{ lv.desc }}"><span class="bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span class="conf-l">{{ lv.name }}</span></span>{% endfor %}</div>{% endmacro %}
