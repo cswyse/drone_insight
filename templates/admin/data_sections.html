@@ -3,7 +3,7 @@
 {% block admin %}
 {{ data_nav('sections') }}
 <div class="adm-title" style="padding-top:12px"><h1>Page sections</h1></div>
-<p class="muted" style="max-width:48em">Add your own sections to the dashboard pages, such as <i>Products</i> or <i>Website</i> on every company page. You set up the section here once. Then you fill it in for each company, country, sub-sector or vertical, and it shows on that page only when it has content.</p>
+<p class="muted" style="max-width:48em">Add your own sections to the dashboard pages, such as <i>Products</i> or <i>Awards</i> on every company page. You set up the section here once. Then you fill it in for each company, country, sub-sector or vertical, and it shows on that page only when it has content.</p>
 <form method="post" class="adm-form" style="max-width:1000px">
   <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
   {% for ent, label, items in groups %}

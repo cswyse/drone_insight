@@ -148,6 +148,7 @@ def inject():
 
 
 app.jinja_env.filters["md"] = richtext.render
+app.jinja_env.filters["site_label"] = dataio.website_label
 
 
 def get_filters(args=None):

@@ -39,6 +39,7 @@
         {% if co.description %}<div class="prose-sm">{{ co.description|md }}</div>
         {% elif co.primary %}<p>{{ co.name }} provides {{ SUB[co.primary].phrase }}{% if co.subsectors|length > 1 %} and {{ SUB[co.subsectors[1]].phrase }}{% endif %}{% if co.presence %} to customers in {{ co.presence|length }} countr{{ 'y' if co.presence|length == 1 else 'ies' }}{% endif %}{% if co.verticals %}, with particular strength in {{ VERT[co.verticals[0]].name }}{% if co.verticals|length > 1 %} and {{ VERT[co.verticals[1]].name }}{% endif %}{% endif %}.{% if co.city %} It is headquartered in {{ co.city }}.{% endif %}</p>{% endif %}
         <dl class="dl">
+          {% if co.website %}<dt>Website</dt><dd><a href="{{ co.website }}" target="_blank" rel="noopener nofollow">{{ co.website|site_label }}</a></dd>{% endif %}
           {{ facts_rows(blocks.facts) }}
           {% if co.subsectors %}<dt>Sub-sectors</dt><dd>{% for s in co.subsectors %}<a href="{{ url_for('dashboard', subsector=s, view='country') }}">{{ SUB[s].name }}</a>{{ ', ' if not loop.last }}{% endfor %}</dd>{% endif %}
           {% if co.verticals %}<dt>Verticals</dt><dd>{% for v in co.verticals %}<a href="{{ url_for('dashboard', vertical=v, view='country') }}">{{ VERT[v].name }}</a>{{ ', ' if not loop.last }}{% endfor %}</dd>{% endif %}

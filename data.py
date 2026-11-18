@@ -245,7 +245,7 @@ def reload():
         companies[slug] = {
             "slug": slug, "name": p["name"], "hq": hq, "city": p.get("city") or (COUNTRY[hq].get("city", "") if hq else ""),
             "ownership": p.get("ownership") or "Private", "ticker": p.get("ticker") or None,
-            "exchange": p.get("exchange") or None, "founded": p.get("founded"), "market_cap": p.get("market_cap"),
+            "exchange": p.get("exchange") or None, "website": p.get("website") or "", "founded": p.get("founded"), "market_cap": p.get("market_cap"),
             "description": p.get("description") or "", "alloc": p.get("alloc", {}),
             "primary": subs[0] if subs else None, "subsectors": subs, "verticals": verts, "presence": pres,
             "has_split": bool(cells), "has_quarterly": bool(qrows),

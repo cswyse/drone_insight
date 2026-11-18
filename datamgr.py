@@ -326,7 +326,7 @@ def register(app, admin_required, paginate):
     def _company_form(co, fin, fin_q=()):
         """Flat dict of string values for the company form."""
         f = {"name": co.get("name", ""), "hq": co.get("hq", ""), "city": co.get("city", ""), "ownership": co.get("ownership", "Private"),
-             "ticker": co.get("ticker") or "", "exchange": co.get("exchange") or "", "founded": co.get("founded") or "",
+             "ticker": co.get("ticker") or "", "exchange": co.get("exchange") or "", "website": co.get("website") or "", "founded": co.get("founded") or "",
              "market_cap": co.get("market_cap") or "", "description": co.get("description", "")}
         for dim in dataio.DIM_KINDS:
             for k, v in (co.get("alloc", {}).get(dim, {}) or {}).items():
@@ -370,6 +370,11 @@ def register(app, admin_required, paginate):
             hq = form.get("hq") or ""
             if hq and hq not in d.COUNTRY:
                 errors["hq"] = "Choose a country from the list."
+            website = ""
+            try:
+                website = dataio.clean_website(form.get("website"))
+            except ValueError:
+                errors["website"] = "Enter a web address such as example.com or https://example.com."
             founded = None
             if (form.get("founded") or "").strip():
                 try:
@@ -426,7 +431,7 @@ def register(app, admin_required, paginate):
                 taken = set(d.STORE.companies)
                 slug = slug or dataio.unique_id(name, taken)
                 data = {"hq": hq, "city": (form.get("city") or "").strip()[:80], "ownership": (form.get("ownership") or "Private").strip()[:60],
-                        "ticker": (form.get("ticker") or "").strip()[:12], "exchange": (form.get("exchange") or "").strip()[:20],
+                        "website": website, "ticker": (form.get("ticker") or "").strip()[:12], "exchange": (form.get("exchange") or "").strip()[:20],
                         "founded": founded, "market_cap": mcap, "description": (form.get("description") or "").strip()[:5000], "alloc": alloc}
                 dataio.save_company(slug, name[:120], data)
                 dataio.save_fin(slug, fin_rows, clear=dataio.FIN_YEARS)

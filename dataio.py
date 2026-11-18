@@ -6,6 +6,7 @@ edited in Admin > Dashboard data.
 import html
 import json
 import re
+from urllib.parse import urlparse
 
 from markupsafe import Markup
 
@@ -436,12 +437,36 @@ def render_value(kind, raw):
 # ----------------------------------------------------------------------
 FLAG_FIX = {"uk": "gb"}
 DEFAULT_SECTIONS = [
-    ("website", "company", "Website", "fact", "top", 0),
     ("products", "company", "Products and services", "list", "top", 1),
     ("country-overview", "country", "Overview", "text", "top", 0),
     ("subsector-overview", "subsector", "Overview", "text", "top", 0),
     ("vertical-overview", "vertical", "Overview", "text", "top", 0),
 ]
+
+
+def clean_website(text):
+    """A company website as a full http(s) address. 'example.com' becomes 'https://example.com'. Blank gives ''.
+    Anything that is not a plain web address (other schemes, spaces, no dot in the host) raises ValueError."""
+    t = (text or "").strip()
+    if not t:
+        return ""
+    if not re.match(r"^https?://", t, re.I):
+        if re.match(r"^[a-z][a-z0-9+.-]*://", t, re.I) or re.match(r"^(javascript|data|vbscript|mailto|file|tel):", t, re.I):
+            raise ValueError(text)          # other schemes: ftp://, javascript:, mailto: and the like
+        t = "https://" + t.lstrip("/")
+    p = urlparse(t)
+    try:
+        p.port
+    except ValueError:
+        raise ValueError(text)
+    if len(t) > 300 or re.search(r"[\s<>\"']", t) or not p.hostname or "." not in p.hostname:
+        raise ValueError(text)
+    return t
+
+
+def website_label(url):
+    """The address as shown to readers: no scheme, no www, no trailing slash."""
+    return re.sub(r"^https?://(www\.)?", "", url or "").rstrip("/")
 
 
 def write_default_sections():

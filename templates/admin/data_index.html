@@ -12,17 +12,17 @@
 </div>
 {% endif %}
 
-<div class="steps">
-  <div class="step"><b>1. Taxonomy</b><span class="muted small">The countries, sub-sectors and verticals the market is split into.</span>
+<div class="adm-steps">
+  <div class="adm-step"><b>1. Taxonomy</b><span class="muted small">The countries, sub-sectors and verticals the market is split into.</span>
     <span class="small">{{ stats.countries }} countries, {{ stats.subsectors }} sub-sectors, {{ stats.verticals }} verticals</span>
     <a class="btn small" href="{{ url_for('admin_taxonomy') }}">Edit lists</a></div>
-  <div class="step"><b>2. Market sizing</b><span class="muted small">Market size by year for each country, sub-sector and vertical.</span>
+  <div class="adm-step"><b>2. Market sizing</b><span class="muted small">Market size by year for each country, sub-sector and vertical.</span>
     <span class="small">{{ stats.cells }} of {{ '{:,}'.format(stats.cells_possible) }} possible rows filled</span>
     <a class="btn small" href="{{ url_for('admin_market') }}">Enter market sizes</a></div>
-  <div class="step"><b>3. Companies</b><span class="muted small">Profile, revenue split and financials for each company.</span>
+  <div class="adm-step"><b>3. Companies</b><span class="muted small">Profile, revenue split and financials for each company.</span>
     <span class="small">{{ stats.companies }} compan{{ 'y' if stats.companies == 1 else 'ies' }}</span>
     <a class="btn small" href="{{ url_for('admin_companies') }}">Manage companies</a></div>
-  <div class="step"><b>4. Page sections</b><span class="muted small">Add your own sections, such as Products or Website, to company and market pages.</span>
+  <div class="adm-step"><b>4. Page sections</b><span class="muted small">Add your own sections, such as Products or Awards, to company and market pages.</span>
     <span class="small">{{ stats.sections }} section{{ '' if stats.sections == 1 else 's' }} set up</span>
     <a class="btn small" href="{{ url_for('admin_sections') }}">Edit sections</a></div>
 </div>

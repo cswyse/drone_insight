@@ -10,6 +10,7 @@
 
   <fieldset><legend>Profile</legend>
     <div class="field"><label for="name">Company name</label><input id="name" type="text" name="name" value="{{ form.name }}" required>{{ err('name') }}</div>
+    <div class="field" style="margin-top:14px"><label for="website">Website</label><input id="website" type="text" name="website" value="{{ form.website }}" placeholder="example.com" autocomplete="off">{{ err('website') }}<span class="hint">Shown as a link at the top of the About box.</span></div>
     <div class="row" style="margin-top:14px">
       <div class="field"><label for="hq">Headquarters country</label><select id="hq" name="hq"><option value="">Choose</option>{% for c in COUNTRY.values() %}<option value="{{ c.id }}" {{ 'selected' if form.hq == c.id }}>{{ c.name }}</option>{% endfor %}</select>{{ err('hq') }}</div>
       <div class="field"><label for="city">City</label><input id="city" type="text" name="city" value="{{ form.city }}"></div>
