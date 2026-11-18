@@ -13,6 +13,7 @@ import config as cfg
 import db
 import richtext
 import sample_data
+import timeline
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS dims (
@@ -29,6 +30,10 @@ CREATE TABLE IF NOT EXISTS companies (
 CREATE TABLE IF NOT EXISTS fin (
     slug TEXT NOT NULL, year INTEGER NOT NULL, revenue REAL, gross_margin REAL, ebitda REAL,
     net_income REAL, capex REAL, employees INTEGER, conf TEXT, PRIMARY KEY (slug, year)
+);
+CREATE TABLE IF NOT EXISTS fin_q (
+    slug TEXT NOT NULL, year INTEGER NOT NULL, quarter INTEGER NOT NULL, revenue REAL, ebitda REAL,
+    net_income REAL, capex REAL, conf TEXT, PRIMARY KEY (slug, year, quarter)
 );
 CREATE TABLE IF NOT EXISTS sections (
     id TEXT PRIMARY KEY, entity TEXT NOT NULL, title TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'text',
@@ -48,7 +53,8 @@ KINDS = [("text", "Text", "Paragraphs. Markdown works."),
          ("fact", "Short fact", "A single line shown in the About box, such as a website or founder.")]
 DIM_KINDS = ("country", "subsector", "vertical")
 OWNERSHIP = ["Public", "Private", "Private (PE-backed)", "Private (founder-owned)", "Subsidiary", "Government-owned"]
-FIN_YEARS = [y for y in cfg.YEARS if y <= cfg.ESTIMATE_YEAR]
+FIN_YEARS = timeline.FIN_YEARS          # years company financials can be entered for; kept in step with the timeline
+_LEGACY_YEARS = list(cfg.YEARS)         # market values used to be stored as a list for these years
 # Panels built into the pages that can be switched off (id, label)
 BLOCKS = {
     "dashboard": [("news", "Latest news"), ("chart", "Market size chart"), ("trend", "Top items over time"), ("heatmap", "Sub-sector by vertical grid")],
@@ -150,6 +156,24 @@ def init():
             cols = [r["name"] for r in c.execute(f"PRAGMA table_info({table})")]
             if "conf" not in cols:
                 c.execute(f"ALTER TABLE {table} ADD COLUMN conf TEXT")
+        for r in c.execute("SELECT country, subsector, vertical, vals FROM market WHERE vals LIKE '[%'").fetchall():
+            c.execute("UPDATE market SET vals=? WHERE country=? AND subsector=? AND vertical=?",
+                      (json.dumps(_vals_dict(r["vals"])), r["country"], r["subsector"], r["vertical"]))
+
+
+def _vals_dict(text):
+    """Stored market values as {"year": value}. Older databases hold a plain list for the original years."""
+    j = json.loads(text)
+    if isinstance(j, list):
+        return {str(y): v for y, v in zip(_LEGACY_YEARS, j)}
+    return {str(k): v for k, v in j.items()}
+
+
+def _window(stored):
+    """Market series for the years on the timeline. Years you have not entered are filled in: gaps are smoothed and
+    years beyond your numbers follow their growth, so moving the timeline forward gives a sensible first estimate."""
+    raw = [stored.get(str(y)) for y in cfg.YEARS]
+    return fill_series(raw, None, len(raw)) if any(v is not None for v in raw) else None
 
 
 def load_dims():
@@ -163,7 +187,12 @@ def load_dims():
 
 def load_market():
     with db.conn() as c:
-        return {(r["country"], r["subsector"], r["vertical"]): json.loads(r["vals"]) for r in c.execute("SELECT * FROM market")}
+        out = {}
+        for r in c.execute("SELECT * FROM market"):
+            series = _window(_vals_dict(r["vals"]))
+            if series is not None:
+                out[(r["country"], r["subsector"], r["vertical"])] = series
+        return out
 
 
 def load_market_conf():
@@ -183,6 +212,34 @@ def load_fin():
         for r in c.execute("SELECT * FROM fin ORDER BY slug, year"):
             out.setdefault(r["slug"], []).append(dict(r))
     return out
+
+
+def load_fin_q():
+    out = {}
+    with db.conn() as c:
+        for r in c.execute("SELECT * FROM fin_q ORDER BY slug, year, quarter"):
+            out.setdefault(r["slug"], []).append(dict(r))
+    return out
+
+
+def save_fin_q(slug, rows, replace=True, clear=None):
+    """rows: dicts with year, quarter, revenue and optional ebitda, net_income, capex, conf (a row without 'conf'
+    keeps the level it had). clear: (year, quarter) pairs to delete first; see save_fin."""
+    with db.conn() as c:
+        if clear is not None:
+            c.executemany("DELETE FROM fin_q WHERE slug=? AND year=? AND quarter=?", [(slug, y, q) for y, q in clear])
+        elif replace:
+            c.execute("DELETE FROM fin_q WHERE slug=?", (slug,))
+        for r in rows:
+            base = (slug, r["year"], r["quarter"], r.get("revenue"), r.get("ebitda"), r.get("net_income"), r.get("capex"))
+            keep = ("ON CONFLICT(slug, year, quarter) DO UPDATE SET revenue=excluded.revenue, ebitda=excluded.ebitda, "
+                    "net_income=excluded.net_income, capex=excluded.capex")
+            if "conf" in r:
+                c.execute("INSERT INTO fin_q (slug, year, quarter, revenue, ebitda, net_income, capex, conf) VALUES (?,?,?,?,?,?,?,?) "
+                          + keep + ", conf=excluded.conf", base + (r["conf"],))
+            else:
+                c.execute("INSERT INTO fin_q (slug, year, quarter, revenue, ebitda, net_income, capex) VALUES (?,?,?,?,?,?,?) " + keep, base)
+        db.bump(c)
 
 
 def load_sections():
@@ -247,7 +304,10 @@ def save_market(cells, conf=None):
             if vals is None:
                 c.execute("DELETE FROM market WHERE country=? AND subsector=? AND vertical=?", (co, su, ve))
                 continue
-            v = json.dumps([round(x, 6) for x in vals])
+            row = c.execute("SELECT vals FROM market WHERE country=? AND subsector=? AND vertical=?", (co, su, ve)).fetchone()
+            stored = _vals_dict(row["vals"]) if row else {}       # years outside the timeline are kept
+            stored.update({str(y): round(x, 6) for y, x in zip(cfg.YEARS, vals)})
+            v = json.dumps(stored)
             if (co, su, ve) in conf:
                 c.execute("INSERT INTO market (country, subsector, vertical, vals, conf) VALUES (?,?,?,?,?) "
                           "ON CONFLICT(country, subsector, vertical) DO UPDATE SET vals=excluded.vals, conf=excluded.conf",
@@ -271,11 +331,14 @@ def save_company(slug, name, data):
         db.bump(c)
 
 
-def save_fin(slug, rows, replace=True):
+def save_fin(slug, rows, replace=True, clear=None):
     """rows: list of dicts with year and optional revenue, gross_margin, ebitda, net_income, capex, employees, conf.
-    A row without a 'conf' key keeps the level it had."""
+    A row without a 'conf' key keeps the level it had. clear: years to delete first (the years a form covers), which
+    leaves rows for other years alone; without it, replace=True deletes them all."""
     with db.conn() as c:
-        if replace:
+        if clear is not None:
+            c.executemany("DELETE FROM fin WHERE slug=? AND year=?", [(slug, y) for y in clear])
+        elif replace:
             c.execute("DELETE FROM fin WHERE slug=?", (slug,))
         for r in rows:
             base = (slug, r["year"], r.get("revenue"), r.get("gross_margin"), r.get("ebitda"), r.get("net_income"), r.get("capex"), r.get("employees"))
@@ -293,6 +356,7 @@ def delete_company(slug):
     with db.conn() as c:
         c.execute("DELETE FROM companies WHERE slug=?", (slug,))
         c.execute("DELETE FROM fin WHERE slug=?", (slug,))
+        c.execute("DELETE FROM fin_q WHERE slug=?", (slug,))
         c.execute("DELETE FROM section_values WHERE entity_id=? AND section_id IN (SELECT id FROM sections WHERE entity='company')", (slug,))
         db.bump(c)
     scrub_news("company", slug)
@@ -389,13 +453,15 @@ def write_default_sections():
 
 def wipe_all():
     with db.conn() as c:
-        for t in ("dims", "market", "companies", "fin", "sections", "section_values"):
+        for t in ("dims", "market", "companies", "fin", "fin_q", "sections", "section_values"):
             c.execute(f"DELETE FROM {t}")
 
 
 def seed_sample():
     """Write the generated sample dataset (taxonomy, market, companies, financials) to the database."""
     st = sample_data.get()
+    timeline.reset()           # the sample is built for the default timeline
+    timeline.apply()
     wipe_all()
     with db.conn() as c:
         for i, ct in enumerate(sample_data.COUNTRIES):
@@ -409,7 +475,8 @@ def seed_sample():
         for (co, su, ve), vals in st.market.items():
             h = sum(ord(ch) for ch in co + su + ve) % 8          # a spread of levels so the sample shows the feature
             lvl = "high" if h < 2 else ("low" if h == 7 else "medium")
-            c.execute("INSERT INTO market (country, subsector, vertical, vals, conf) VALUES (?,?,?,?,?)", (co, su, ve, json.dumps([round(x, 4) for x in vals]), lvl))
+            c.execute("INSERT INTO market (country, subsector, vertical, vals, conf) VALUES (?,?,?,?,?)",
+                      (co, su, ve, json.dumps({str(y): round(x, 4) for y, x in zip(sample_data.YEARS, vals)}), lvl))
         for slug, co in st.companies.items():
             alloc = {"country": {}, "subsector": {}, "vertical": {}}
             idx = {"country": 0, "subsector": 1, "vertical": 2}
@@ -427,7 +494,7 @@ def seed_sample():
             c.execute("INSERT INTO companies VALUES (?,?,?)", (slug, co["name"], json.dumps(data)))
             for r in st.fin[slug]:
                 h = sum(ord(ch) for ch in slug) % 5      # a spread of levels for the sample's current-year estimates
-                lvl = (None if r["year"] <= cfg.LAST_ACTUAL else ("medium" if h in (1, 2) else "low" if h == 3 else None))
+                lvl = (None if r["year"] <= sample_data.LAST_ACTUAL else ("medium" if h in (1, 2) else "low" if h == 3 else None))
                 c.execute("INSERT INTO fin (slug, year, revenue, gross_margin, ebitda, net_income, capex, employees, conf) VALUES (?,?,?,?,?,?,?,?,?)",
                           (slug, r["year"], round(r["revenue"], 1), round(r["gross_margin"], 4), round(r["ebitda"], 1),
                            round(r["net_income"], 1), round(r["capex"], 1), r["employees"], lvl))

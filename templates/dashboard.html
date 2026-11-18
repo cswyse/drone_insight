@@ -16,14 +16,15 @@
         <span class="chip">{% if c.dim == 'country' %}{{ flag(c.id) }}{% endif %}{{ c.name }}<a href="{{ c.remove }}" aria-label="Remove {{ c.name }} filter" title="Remove filter">&times;</a></span>
       {% endfor %}
     </div>
+    <p class="asof">Data as of {{ tl.as_of }} &middot; {{ tl.note }}</p>
   </div>
 </section>
 
 <div class="wrap" style="padding-bottom:64px">
   <div class="kpis">
-    <div class="kpi"><div class="label">Market size {{ year_now }}E</div><div class="value">US${{ fmt_bn(summ.size, dec) }} bn</div><div class="sub">{{ fmt_pct(summ.yoy, 1, true) }} on {{ year_now - 1 }}{% if summ.conf %} &middot; {{ conf(summ.conf) }}{% endif %}</div></div>
-    <div class="kpi"><div class="label">Growth {{ years[0] }} to {{ year_now }} (CAGR)</div><div class="value">{{ fmt_pct(summ.cagr_hist) }}</div><div class="sub">Actual and estimate</div></div>
-    <div class="kpi"><div class="label">Forecast to {{ years[-1] }} (CAGR)</div><div class="value">{{ fmt_pct(summ.cagr_fc) }}</div><div class="sub">US${{ fmt_bn(summ.series[-1], dec) }} bn in {{ years[-1] }}</div></div>
+    <div class="kpi"><div class="label">Market size {{ now_lbl }}</div><div class="value">US${{ fmt_bn(summ.size, dec) }} bn</div><div class="sub">{{ fmt_pct(summ.yoy, 1, true) }} on {{ year_now - 1 }}{% if summ.conf %} &middot; {{ conf(summ.conf) }}{% endif %}</div></div>
+    <div class="kpi"><div class="label">Growth {{ cagr_h.from }} to {{ cagr_h.to }} (CAGR)</div><div class="value">{{ fmt_pct(summ.cagr_hist) }}</div><div class="sub">Actual and estimate</div></div>
+    <div class="kpi"><div class="label">Forecast to {{ cagr_f.to }} (CAGR)</div><div class="value">{{ fmt_pct(summ.cagr_fc) }}</div><div class="sub">US${{ fmt_bn(summ.fc_end, dec) }} bn in {{ cagr_f.to }}</div></div>
     <div class="kpi"><div class="label">Companies active</div><div class="value">{{ n_companies }}</div><div class="sub">of {{ companies_all|length }} tracked</div></div>
   </div>
 
@@ -78,9 +79,9 @@
       <table class="data sortable" data-per="{{ 25 }}">
         <thead>
           {% if view == 'company' %}
-          <tr><th data-sort="text">Company</th><th data-sort="text">HQ</th><th data-sort="num">Revenue in selection {{ year_now }}E (US$ m)</th><th data-sort="num">Market share</th><th data-sort="num">CAGR {{ years[0] }}-{{ year_now - 2000 }}</th><th data-sort="num">EBITDA margin</th><th data-sort="num">Confidence</th></tr>
+          <tr><th data-sort="text">Company</th><th data-sort="text">HQ</th><th data-sort="num">Revenue in selection {{ now_lbl }} (US$ m)</th><th data-sort="num">Market share</th><th data-sort="num">CAGR {{ cagr_h.from }}-{{ cagr_h.to - 2000 }}</th><th data-sort="num">EBITDA margin</th><th data-sort="num">Confidence</th></tr>
           {% else %}
-          <tr><th data-sort="text">{{ {'country': 'Country', 'subsector': 'Sub-sector', 'vertical': 'Vertical'}[view] }}</th><th data-sort="num">{{ year_now }}E (US$ bn)</th><th data-sort="num">Share of selection</th><th data-sort="num">YoY</th><th data-sort="num">CAGR {{ years[0] }}-{{ year_now - 2000 }}</th><th data-sort="num">CAGR {{ year_now - 2000 }}-{{ years[-1] - 2000 }}F</th><th data-sort="num">Confidence</th></tr>
+          <tr><th data-sort="text">{{ {'country': 'Country', 'subsector': 'Sub-sector', 'vertical': 'Vertical'}[view] }}</th><th data-sort="num">{{ now_lbl }} (US$ bn)</th><th data-sort="num">Share of selection</th><th data-sort="num">YoY</th><th data-sort="num">CAGR {{ cagr_h.from }}-{{ cagr_h.to - 2000 }}</th><th data-sort="num">CAGR {{ cagr_f.from - 2000 }}-{{ cagr_f.to - 2000 }}F</th><th data-sort="num">Confidence</th></tr>
           {% endif %}
         </thead>
         <tbody>
@@ -151,7 +152,7 @@
     {% for s in b.bottom %}<div class="prose-sm" style="{{ 'margin-top:16px' if not loop.first }}"><h4 class="sec-h">{{ s.title }}</h4>{{ s.html }}</div>{% endfor %}
   </div></div>
   {% endif %}{% endfor %}
-  <p class="small muted" style="margin-top:18px">{{ year_now }} is estimated; {{ year_now + 1 }} onward are forecasts. Company figures show revenue earned within the current selection.</p>
+  <p class="small muted" style="margin-top:18px">{{ tl.note }}. Company figures show revenue earned within the current selection.</p>
   {{ conf_key() }}
 </div>
 </div>

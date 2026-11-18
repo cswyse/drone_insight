@@ -478,3 +478,16 @@ table.data td .conf { justify-content: flex-end; }
 .conf-key .conf { color: var(--muted); }
 .panel-title .tbl-reset { font-weight: 600; }
 .conf-select { min-width: 150px; }
+
+.dash-head .asof { margin: 12px 0 0; font-size: .85rem; color: rgba(255,255,255,.7); }
+
+/* ---------- Timeline admin ---------- */
+.tl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 18px; }
+.tl-big { font-family: var(--font-display, inherit); font-size: 1.6rem; color: var(--primary); margin-top: 2px; }
+.tl-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 8px; }
+.tl-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 4px 18px; }
+
+.seg { display: inline-flex; border: 1px solid var(--line); margin-bottom: 14px; }
+.seg a { padding: 7px 16px; font-size: .88rem; font-weight: 600; color: var(--muted); }
+.seg a:hover { text-decoration: none; color: var(--accent); }
+.seg a.on { background: var(--primary); color: var(--on-primary); }

@@ -38,7 +38,7 @@
         <div><h4>Research</h4><a href="{{ url_for('whitepapers') }}">White papers</a><a href="{{ url_for('reports') }}">Reports</a></div>
         <div><h4>Explore</h4><a href="{{ url_for('dashboard', view='country') }}">By country</a><a href="{{ url_for('dashboard', view='subsector') }}">By sub-sector</a><a href="{{ url_for('dashboard', view='vertical') }}">By vertical</a><a href="{{ url_for('dashboard', view='company') }}">By company</a></div>
       </div>
-      <div class="legal">{% if sample_notice %}Sample data: all companies, people, figures and events shown are fictional and generated for demonstration. Replace with licensed data before use. {% endif %}&copy; {{ year_now }} {{ brand.name }}. <a href="{{ url_for('terms') }}" style="display:inline;margin-left:6px">Terms</a> <a href="{{ url_for('privacy') }}" style="display:inline;margin-left:6px">Privacy</a> <a href="{{ url_for('admin_index') if is_admin() else url_for('admin_login') }}" style="display:inline;margin-left:10px">Admin</a></div>
+      <div class="legal">{% if sample_notice %}Sample data: all companies, people, figures and events shown are fictional and generated for demonstration. Replace with licensed data before use. {% endif %}&copy; {{ copyright_year }} {{ brand.name }}. <a href="{{ url_for('terms') }}" style="display:inline;margin-left:6px">Terms</a> <a href="{{ url_for('privacy') }}" style="display:inline;margin-left:6px">Privacy</a> <a href="{{ url_for('admin_index') if is_admin() else url_for('admin_login') }}" style="display:inline;margin-left:10px">Admin</a></div>
     </div>
   </footer>
   <script src="{{ url_for('static', filename='js/charts.js') }}"></script>

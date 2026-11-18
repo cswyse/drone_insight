@@ -22,6 +22,9 @@
     var rev = json('data-rev');
     if (rev) MI.columns('chart-rev', rev.data, { unit: 'US$ m', dec: 0, label: 'Revenue' });
 
+    var revq = json('data-revq');
+    if (revq) MI.columns('chart-revq', revq.data, { unit: 'US$ m', dec: 0, label: 'Quarterly revenue' });
+
     var mar = json('data-margin');
     if (mar) MI.lines('chart-margin', mar.years, [{ name: 'EBITDA margin', values: mar.values }],
       { unit: '%', dec: 1, zero: false, axisDec: 1, label: 'EBITDA margin' });
@@ -145,6 +148,19 @@
     history.replaceState({ dash: 1 }, '');
     window.addEventListener('popstate', function (e) { if (e.state && e.state.dash) swap(location.href, false); });
   }
+
+  // Annual / Quarterly switch on the company page
+  document.querySelectorAll('[data-tabset]').forEach(function (set) {
+    set.addEventListener('click', function (e) {
+      var a = e.target.closest('a'); if (!a) return;
+      e.preventDefault();
+      var scope = set.parentNode;
+      set.querySelectorAll('a').forEach(function (x) { x.classList.toggle('on', x === a); });
+      scope.querySelectorAll('[data-pane]').forEach(function (p) { p.hidden = ('#' + p.id) !== a.getAttribute('href'); });
+      var shown = scope.querySelector(a.getAttribute('href')), box = shown && shown.closest('.table-scroll');
+      if (box) box.scrollLeft = box.scrollWidth;   // show the latest periods first
+    });
+  });
 
   // Clickable table rows (and in-dashboard links)
   document.addEventListener('click', function (e) {

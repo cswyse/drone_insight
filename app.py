@@ -15,6 +15,7 @@ import config as cfg
 import content
 import data as d
 import dataio
+import timeline
 import datamgr
 import db
 import members
@@ -135,7 +136,7 @@ def is_admin():
 app.jinja_env.globals.update(
     fmt_bn=fmt_bn, fmt_m=fmt_m, fmt_pct=fmt_pct, fmt_date=fmt_date, money=money,
     COUNTRY=d.COUNTRY, SUB=d.SUB, VERT=d.VERT, companies_all=d.STORE.companies, NEWS_TYPES=cfg.NEWS_TYPES,
-    csrf_token=csrf_token, is_admin=is_admin, CONF=dataio.LEVEL, CONF_LEVELS=dataio.LEVELS,
+    csrf_token=csrf_token, is_admin=is_admin, ysuf=timeline.year_suffix, CONF=dataio.LEVEL, CONF_LEVELS=dataio.LEVELS,
 )
 
 
@@ -143,7 +144,7 @@ app.jinja_env.globals.update(
 def inject():
     s = settings.load()
     return {"brand": s["brand"], "theme_v": settings.version(), "fonts_url": s["theme"]["google_fonts_url"],
-            "nav_active": request.endpoint, "hidden": dataio.hidden_blocks(), "sample_notice": db.get_meta("sample_notice", "1") == "1", "today": fmt_date(cfg.TODAY, long=True), "year_now": cfg.ESTIMATE_YEAR, "CONF": dataio.LEVEL, "CONF_LEVELS": dataio.LEVELS}
+            "nav_active": request.endpoint, "hidden": dataio.hidden_blocks(), "sample_notice": db.get_meta("sample_notice", "1") == "1", "copyright_year": date.today().year, "year_now": cfg.ESTIMATE_YEAR, "tl": timeline.describe(), "cagr_h": d.cagr_years()[0], "cagr_f": d.cagr_years()[1], "now_lbl": f"{cfg.ESTIMATE_YEAR}{timeline.year_suffix(cfg.ESTIMATE_YEAR)}", "CONF": dataio.LEVEL, "CONF_LEVELS": dataio.LEVELS}
 
 
 app.jinja_env.filters["md"] = richtext.render
@@ -277,20 +278,23 @@ def company(slug):
     f = get_filters()
     fin = d.STORE.fin.get(slug, [])
     latest, prev = d.last_fin(slug), d.prev_fin(slug)
+    emp = next((r["employees"] for r in reversed(fin) if r["employees"] is not None), None)   # latest headcount reported
     slice_info = None
     if f:
         mkt = d.market_series(f)
         cs = d.company_series(slug, f)
         slice_info = {"revenue": cs[d.IDX2026], "market": mkt[d.IDX2026] * 1000,
                       "share": cs[d.IDX2026] / (mkt[d.IDX2026] * 1000) if mkt[d.IDX2026] else 0,
-                      "cagr": d.cagr(cs[0], cs[d.IDX2026], d.IDX2026),
+                      "cagr": d.hist_cagr(cs),
                       "label": " · ".join(d.DIM_LOOKUP[k][v]["name"] for k, v in f.items())}
     chart_rev = [{"year": r["year"], "value": round(r["revenue"], 1), "status": r["status"]} for r in fin]
     chart_margin = [{"year": r["year"], "value": round(r["ebitda_margin"] * 100, 2), "status": r["status"]} for r in fin
                     if r["ebitda_margin"] is not None]
     back = url_for("dashboard", **f, view="company") if f else url_for("dashboard", view="company")
-    return render_template("company.html", co=co, fin=fin, latest=latest, prev=prev,
+    return render_template("company.html", co=co, fin=fin, latest=latest, prev=prev, emp=emp,
                            bd=d.company_breakdowns(slug), news=d.company_news(slug, 6), peers=d.peers(slug),
+                           fin_q=d.STORE.fin_q.get(slug, []),
+                           chart_revq=[{"year": r["short"], "value": round(r["revenue"], 1), "status": r["status"]} for r in d.STORE.fin_q.get(slug, [])[-12:]],
                            chart_rev=chart_rev, chart_margin=chart_margin, slice_info=slice_info, f=f, back=back,
                            blocks=d.section_blocks("company", slug))
 
@@ -415,8 +419,9 @@ def api_market():
     return jsonify({
         "filters": f, "view": view, "years": d.YEARS, "unit": "US$ bn (company view: US$ m)",
         "total": [round(v, 3) for v in total],
-        "rows": [{"id": r["id"], "name": r["name"], "size_2026": round(r["size"], 3), "share": round(r["share"], 4),
-                  "cagr_2021_26": r["cagr_hist"], "cagr_2026_30": r["cagr_fc"]} for r in rows],
+        "current_year": cfg.ESTIMATE_YEAR,
+        "rows": [{"id": r["id"], "name": r["name"], "size_current_year": round(r["size"], 3), "share": round(r["share"], 4),
+                  "cagr_history": r["cagr_hist"], "cagr_forecast": r["cagr_fc"]} for r in rows],
     })
 
 

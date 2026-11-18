@@ -24,12 +24,12 @@
   <div class="kpis">
     <div class="kpi"><div class="label">Revenue {{ latest.year }}{{ 'E' if latest.status == 'E' }}</div><div class="value">{% if latest.revenue is not none %}US${{ fmt_m(latest.revenue) }}{% else %}n/a{% endif %}</div><div class="sub">{% if latest.growth is not none %}{{ fmt_pct(latest.growth, 1, true) }} on {{ prev.year }}{% else %}No prior year to compare{% endif %}{% if latest.conf %} &middot; {{ conf(latest.conf) }}{% endif %}</div></div>
     <div class="kpi"><div class="label">EBITDA margin</div><div class="value">{{ fmt_pct(latest.ebitda_margin) }}</div><div class="sub">{% if latest.ebitda is not none %}EBITDA US${{ fmt_m(latest.ebitda) }}{% else %}Not reported{% endif %}</div></div>
-    <div class="kpi"><div class="label">Employees</div><div class="value">{{ '{:,}'.format(latest.employees) if latest.employees is not none else 'n/a' }}</div><div class="sub">{{ co.presence|length }} countr{{ 'y' if co.presence|length == 1 else 'ies' }}</div></div>
+    <div class="kpi"><div class="label">Employees</div><div class="value">{{ '{:,}'.format(emp) if emp is not none else 'n/a' }}</div><div class="sub">{{ co.presence|length }} countr{{ 'y' if co.presence|length == 1 else 'ies' }}</div></div>
     <div class="kpi"><div class="label">{{ 'Market capitalisation' if co.market_cap else 'Ownership' }}</div><div class="value">{% if co.market_cap %}US${{ fmt_m(co.market_cap) }}{% else %}Private{% endif %}</div><div class="sub">{{ co.ticker or co.ownership }}</div></div>
   </div>
 
   {% if slice_info %}
-  <div class="callout"><b>In your selection ({{ slice_info.label }}):</b> {{ co.name }} earns US${{ '{:,.0f}'.format(slice_info.revenue) }} m in {{ year_now }}E, a {{ fmt_pct(slice_info.share) }} share of a US${{ fmt_bn(slice_info.market / 1000, 1) }} bn market, growing {{ fmt_pct(slice_info.cagr) }} a year since 2021.</div>
+  <div class="callout"><b>In your selection ({{ slice_info.label }}):</b> {{ co.name }} earns US${{ '{:,.0f}'.format(slice_info.revenue) }} m in {{ now_lbl }}, a {{ fmt_pct(slice_info.share) }} share of a US${{ fmt_bn(slice_info.market / 1000, 1) }} bn market, growing {{ fmt_pct(slice_info.cagr) }} a year over {{ cagr_h.from }} to {{ cagr_h.to }}.</div>
   {% endif %}
 
   <div class="dash-grid" style="margin-top:24px{{ ';grid-template-columns:1fr' if 'company.news' in hidden }}">
@@ -59,6 +59,8 @@
 
   {% if 'company.charts' not in hidden and chart_rev %}
   <div class="dash-grid even">
+    {% if chart_revq %}<div class="card"><div class="panel-title"><h3>Quarterly revenue, US$ m</h3></div><div class="panel-body"><div id="chart-revq"></div>
+      <script type="application/json" id="data-revq">{{ {'data': chart_revq}|tojson }}</script></div></div>{% endif %}
     <div class="card"><div class="panel-title"><h3>Revenue, US$ m</h3></div><div class="panel-body"><div id="chart-rev"></div>
       <script type="application/json" id="data-rev">{{ {'data': chart_rev}|tojson }}</script></div></div>
     {% if chart_margin %}<div class="card"><div class="panel-title"><h3>EBITDA margin, %</h3></div><div class="panel-body"><div id="chart-margin"></div>
@@ -71,6 +73,8 @@
     <div class="panel-title"><h3>Financial summary, US$ m</h3>{% if fin and latest.status == 'E' %}<span class="small muted">{{ latest.year }} is an estimate</span>{% endif %}</div>
     <div class="panel-body table-scroll">
       {% if not fin %}<div class="empty">No financials have been added for this company yet.</div>{% else %}
+      {% if fin_q %}<div class="seg" role="tablist" data-tabset aria-label="Annual or quarterly"><a href="#fin-annual" role="tab" class="on">Annual</a><a href="#fin-quarterly" role="tab">Quarterly</a></div>{% endif %}
+      <div id="fin-annual" data-pane>
       <table class="data fin">
         <thead><tr><th></th>{% for r in fin %}<th class="{{ 'est' if r.status == 'E' }}">{{ r.year }}{{ r.status if r.status == 'E' }}</th>{% endfor %}</tr></thead>
         <tbody>
@@ -85,6 +89,28 @@
           <tr class="sub"><td>Confidence</td>{% for r in fin %}<td>{{ conf(r.conf) }}</td>{% endfor %}</tr>
         </tbody>
       </table>
+      {% set ext = fin|selectattr('extrapolated')|list %}{% if ext %}<p class="small muted" style="margin:10px 0 0">{{ ext[0].year }}{{ 'E' if ext[0].status == 'E' }}{% if ext|length > 1 %} to {{ ext[-1].year }}{{ 'E' if ext[-1].status == 'E' }}{% endif %} {{ 'is' if ext|length == 1 else 'are' }} not reported yet. Revenue follows the growth of the markets {{ co.name }} sells into, and EBITDA keeps the latest reported margin. Other lines are left blank.</p>{% endif %}
+      {% for r in fin if r.q_reported == 0 %}<p class="small muted" style="margin:10px 0 0">{{ r.year }}{{ 'E' if r.status == 'E' }} has no reported quarters yet and is projected from the quarterly trend.</p>{% endfor %}
+      {% for r in fin if r.q_reported %}{% if r.q_projected %}<p class="small muted" style="margin:10px 0 0">{{ r.year }}{{ 'E' if r.status == 'E' }} adds up {{ r.q_reported }} reported quarter{{ '' if r.q_reported == 1 else 's' }} and projects the other {{ r.q_projected }}.</p>{% endif %}{% endfor %}
+      </div>
+      {% if fin_q %}
+      <div id="fin-quarterly" data-pane hidden>
+      <table class="data fin">
+        <thead><tr><th></th>{% for r in fin_q %}<th class="{{ 'est' if r.status == 'E' }}">{{ r.short }}{{ 'E' if r.projected or r.status == 'E' }}</th>{% endfor %}</tr></thead>
+        <tbody>
+          <tr><td><b>Revenue</b></td>{% for r in fin_q %}<td><b>{{ n0(r.revenue) }}</b></td>{% endfor %}</tr>
+          <tr class="sub"><td>YoY growth</td>{% for r in fin_q %}<td>{{ fmt_pct(r.yoy, 1, true) if r.yoy is not none else '' }}</td>{% endfor %}</tr>
+          <tr class="sub"><td>QoQ growth</td>{% for r in fin_q %}<td>{{ fmt_pct(r.qoq, 1, true) if r.qoq is not none else '' }}</td>{% endfor %}</tr>
+          <tr><td>EBITDA</td>{% for r in fin_q %}<td>{{ n0(r.ebitda) }}</td>{% endfor %}</tr>
+          <tr class="sub"><td>EBITDA margin</td>{% for r in fin_q %}<td>{{ fmt_pct(r.ebitda_margin) }}</td>{% endfor %}</tr>
+          <tr><td>Net income</td>{% for r in fin_q %}<td>{{ n0(r.net_income) }}</td>{% endfor %}</tr>
+          <tr><td>Capital expenditure</td>{% for r in fin_q %}<td>{{ n0(r.capex) }}</td>{% endfor %}</tr>
+          <tr class="sub"><td>Confidence</td>{% for r in fin_q %}<td>{{ conf(r.conf) }}</td>{% endfor %}</tr>
+        </tbody>
+      </table>
+      {% if fin_q|selectattr('projected')|list %}<p class="small muted" style="margin:10px 0 0">Quarters marked E are not reported yet: each repeats the same quarter a year earlier, scaled by recent growth.</p>{% endif %}
+      </div>
+      {% endif %}
       {{ conf_key() }}
       {% endif %}
     </div>
@@ -95,7 +121,7 @@
   <div class="three-col" style="margin-top:24px">
     {% for dim, label in (('country', 'Revenue by country'), ('subsector', 'Revenue by sub-sector'), ('vertical', 'Revenue by vertical')) %}
     <div class="card">
-      <div class="panel-title"><h3>{{ label }}, {{ year_now }}E</h3></div>
+      <div class="panel-title"><h3>{{ label }}, {{ now_lbl }}</h3></div>
       <div class="panel-body">
         <ul class="bars-list">
           {% for r in bd[dim][:6] %}
@@ -113,7 +139,7 @@
     <div class="panel-title"><h3>Peers</h3><span class="small muted">Companies with overlapping sub-sectors and verticals</span></div>
     <div class="panel-body table-scroll">
       <table class="data">
-        <thead><tr><th>Company</th><th>HQ</th><th>Revenue {{ year_now }}E (US$ m)</th><th>Growth</th><th>EBITDA margin</th></tr></thead>
+        <thead><tr><th>Company</th><th>HQ</th><th>Revenue {{ now_lbl }} (US$ m)</th><th>Growth</th><th>EBITDA margin</th></tr></thead>
         <tbody>
         {% for p in peers %}
           <tr class="click" data-href="{{ url_for('company', slug=p.slug) }}"><td class="name"><a href="{{ url_for('company', slug=p.slug) }}">{{ p.name }}</a></td><td>{{ COUNTRY[p.hq].name if p.hq in COUNTRY else '' }}</td><td>{{ '{:,.0f}'.format(p.revenue) }}</td><td>{{ fmt_pct(p.growth, 1, true) }}</td><td>{{ fmt_pct(p.ebitda_margin) }}</td></tr>

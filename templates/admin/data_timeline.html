@@ -1,0 +1,56 @@
+{% extends "admin/base.html" %}
+{% from "admin/_data_macros.html" import data_nav %}
+{% block admin %}
+{{ data_nav('timeline') }}
+<div class="adm-title" style="padding-top:12px"><h1>Timeline</h1><a class="btn small outline" href="{{ url_for('dashboard') }}">Open the dashboard</a></div>
+<p class="muted" style="max-width:48em">Move the dashboard forward in time. <b>As of</b> is the period the dashboard describes: its current year is the headline year. <b>Reported to</b> is how far your data is actually reported. The two move separately, because the newest figures are often not out yet: years between them show as estimates.</p>
+
+<div class="card tl-now">
+  <div class="panel-body">
+    <div class="tl-grid">
+      <div><div class="small muted">As of</div><div class="tl-big">{{ info.as_of }}</div></div>
+      <div><div class="small muted">Annual data reported to</div><div class="tl-big">{{ info.last_actual_year }}</div></div>
+      <div><div class="small muted">Company quarters reported to</div><div class="tl-big">{{ info.last_actual_q }}</div></div>
+      <div><div class="small muted">Forecast to</div><div class="tl-big">{{ info.last_year }}</div></div>
+    </div>
+    <p class="small muted" style="margin:14px 0 0">The dashboard reads: <b>{{ info.note }}</b>.{% if missing %} <b>{{ missing }}</b> of {{ n_companies }} companies have no {{ t.current_year }} figures yet, so their {{ t.current_year }} revenue is extrapolated from the markets they sell into and shown as a low-confidence estimate.{% endif %}</p>
+  </div>
+</div>
+
+<h3 style="margin-top:30px">Move forward</h3>
+<div class="tl-actions">
+  <form method="post" onsubmit="return confirm('Move the dashboard to {{ nxt.as_of }}?')">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="advance_q">
+    <button class="btn" type="submit">Advance one quarter to {{ nxt.as_of }}</button></form>
+  <form method="post" onsubmit="return confirm('Move the dashboard to {{ nxt_y.as_of }}?')">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="advance_y">
+    <button class="btn outline" type="submit">Advance one year to {{ nxt_y.as_of }}</button></form>
+</div>
+<p class="small muted" style="max-width:48em">Advancing changes the headline year when the year rolls over and extends the forecast by a year. New years are filled in from the growth of your existing market sizes, so there is something to show straight away: enter real figures in <a href="{{ url_for('admin_market') }}">Market sizing</a> when you have them. Your “reported to” dates do not move, so the new period shows as an estimate until your data arrives.</p>
+
+<h3 style="margin-top:30px">When new data arrives</h3>
+<div class="tl-actions">
+  <form method="post"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="report_year">
+    <button class="btn small outline" type="submit" {{ 'disabled' if t.last_actual_year >= t.current_year }}>Mark {{ t.last_actual_year + 1 }} as reported</button></form>
+  <form method="post"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="report_quarter">
+    <button class="btn small outline" type="submit">Mark the next quarter as reported</button></form>
+</div>
+<p class="small muted" style="max-width:48em">Marking a year or quarter as reported changes its label from estimate to actual, and new financials you enter for it default to “Reported”. It does not change any numbers.</p>
+
+<details style="margin:22px 0 80px;max-width:760px" {{ 'open' if request.args.get('edit') }}>
+  <summary><b>Set the dates directly</b></summary>
+  <form method="post" class="adm-form" style="padding:14px 0 0">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="save">
+    <div class="tl-fields">
+      <div class="field"><label for="current_year">As of: year</label><input id="current_year" name="current_year" type="number" value="{{ t.current_year }}"></div>
+      <div class="field"><label for="current_quarter">As of: quarter</label><select id="current_quarter" name="current_quarter">{% for q in (1, 2, 3, 4) %}<option value="{{ q }}" {{ 'selected' if t.current_quarter == q }}>Q{{ q }}</option>{% endfor %}</select></div>
+      <div class="field"><label for="last_actual_year">Annual data reported to (year)</label><input id="last_actual_year" name="last_actual_year" type="number" value="{{ t.last_actual_year }}"></div>
+      <div class="field"><label for="laq_year">Company quarters reported to: year</label><input id="laq_year" name="laq_year" type="number" value="{{ t.last_actual_q[0] }}"></div>
+      <div class="field"><label for="laq_quarter">Company quarters reported to: quarter</label><select id="laq_quarter" name="laq_quarter">{% for q in (1, 2, 3, 4) %}<option value="{{ q }}" {{ 'selected' if t.last_actual_q[1] == q }}>Q{{ q }}</option>{% endfor %}</select></div>
+      <div class="field"><label for="first_year">First year shown</label><input id="first_year" name="first_year" type="number" value="{{ t.first_year }}"><span class="hint">Data from earlier years is kept, just not shown.</span></div>
+      <div class="field"><label for="last_year">Forecast to (year)</label><input id="last_year" name="last_year" type="number" value="{{ t.last_year }}"></div>
+    </div>
+    <div><button class="btn small" type="submit">Save timeline</button></div>
+  </form>
+</details>
+{% endblock %}

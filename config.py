@@ -7,7 +7,7 @@ Everything else (dashboard, updates feed, company pages) reads from here.
 """
 
 # Timeline ---------------------------------------------------------------
-YEARS = list(range(2021, 2031))
+YEARS = list(range(2021, 2032))   # 2021 to 2031: five years of forecast beyond the current year
 LAST_ACTUAL = 2025        # fully reported
 ESTIMATE_YEAR = 2026      # current year, estimate (today is Nov 2026)
 FORECAST_FROM = 2027
@@ -72,3 +72,5 @@ CONFIDENCE = [
      "desc": "Rough estimate with limited evidence. Treat as indicative."},
 ]
 CONFIDENCE_DEFAULT_MARKET = "medium"   # used for market sizes with no level set
+
+CAGR_YEARS = 5   # the growth columns: CAGR over the last 5 years up to the current year, and over the 5 years after it

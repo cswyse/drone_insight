@@ -46,12 +46,28 @@
     <div class="table-scroll"><table class="dtable">
       <thead><tr><th>Year</th><th>Revenue</th><th>Gross margin %</th><th>EBITDA</th><th>Net income</th><th>Capex</th><th>Employees</th><th>Confidence</th></tr></thead>
       <tbody>{% for y in fin_years %}
-        <tr><td class="rowlabel">{{ y }}{{ 'E' if y == year_now }}</td>
-        {% for k in ('revenue', 'gross_margin', 'ebitda', 'net_income', 'capex', 'employees') %}<td><input type="text" inputmode="decimal" name="fin_{{ y }}_{{ k }}" value="{{ form.get('fin_' ~ y ~ '_' ~ k, '') }}" class="{{ 'bad' if errors.get('fin_' ~ y ~ '_' ~ k) }}" style="min-width:90px" title="{{ errors.get('fin_' ~ y ~ '_' ~ k) or '' }}" aria-label="{{ y }} {{ k|replace('_', ' ') }}"></td>{% endfor %}
+        <tr><td class="rowlabel">{{ y }}{{ ysuf(y) }}{% if y in q_years %}<div class="small muted" style="font-weight:400">from quarters</div>{% endif %}</td>
+        {% for k in ('revenue', 'gross_margin', 'ebitda', 'net_income', 'capex', 'employees') %}<td><input type="text" inputmode="decimal" name="fin_{{ y }}_{{ k }}" value="{{ form.get('fin_' ~ y ~ '_' ~ k, '') }}" class="{{ 'bad' if errors.get('fin_' ~ y ~ '_' ~ k) }}" style="min-width:90px{{ ';background:var(--soft)' if y in q_years }}" {{ 'readonly' if y in q_years }} title="{{ 'Taken from the quarterly figures below. ' if y in q_years }}{{ errors.get('fin_' ~ y ~ '_' ~ k) or '' }}" aria-label="{{ y }} {{ k|replace('_', ' ') }}"></td>{% endfor %}
         <td><select name="fin_{{ y }}_conf" class="conf-select" aria-label="{{ y }} confidence"><option value="">Default ({{ CONF['reported' if y <= last_actual else 'high'].short }})</option>{% for lv in CONF_LEVELS %}<option value="{{ lv.id }}" {{ 'selected' if form.get('fin_' ~ y ~ '_conf') == lv.id }}>{{ lv.name }}</option>{% endfor %}</select></td></tr>
       {% endfor %}</tbody>
     </table></div>
     {% for k, m in errors.items() if k.startswith('fin_') or k.startswith('alloc_') %}<div class="err">{{ m }}</div>{% endfor %}
+  </fieldset>
+
+  <fieldset><legend>Quarterly financials (optional)</legend>
+    <details {{ 'open' if has_q or q_has_err }}>
+      <summary><b>{{ 'Edit quarterly figures' if has_q else 'Add quarterly figures' }}</b> <span class="muted small">for companies that report every quarter</span></summary>
+      <p class="muted" style="margin:10px 0">US$ millions. Revenue is required for a quarter; the rest is optional. A year with quarterly figures takes its annual numbers from them: quarters not yet reported are projected from the same quarter a year earlier, and the year is shown as an estimate with lower confidence until all four are in. Quarters run up to {{ tl.as_of }}. Quarters after {{ tl.last_actual_q }} are estimates.</p>
+      <div class="table-scroll"><table class="dtable">
+        <thead><tr><th>Quarter</th><th>Revenue</th><th>EBITDA</th><th>Net income</th><th>Capex</th><th>Confidence</th></tr></thead>
+        <tbody>{% for s in q_slots %}
+          <tr><td class="rowlabel">{{ s.label }}{{ 'E' if s.status == 'E' }}</td>
+          {% for k in ('revenue', 'ebitda', 'net_income', 'capex') %}{% set key = 'fq_' ~ s.y ~ '_' ~ s.q ~ '_' ~ k %}<td><input type="text" inputmode="decimal" name="{{ key }}" value="{{ form.get(key, '') }}" class="{{ 'bad' if errors.get(key) }}" style="min-width:90px" title="{{ errors.get(key) or '' }}" aria-label="{{ s.label }} {{ k|replace('_', ' ') }}"></td>{% endfor %}
+          {% set ckey = 'fq_' ~ s.y ~ '_' ~ s.q ~ '_conf' %}<td><select name="{{ ckey }}" class="conf-select" aria-label="{{ s.label }} confidence"><option value="">Default ({{ CONF['reported' if s.status == 'A' else 'high'].short }})</option>{% for lv in CONF_LEVELS %}<option value="{{ lv.id }}" {{ 'selected' if form.get(ckey) == lv.id }}>{{ lv.name }}</option>{% endfor %}</select></td></tr>
+        {% endfor %}</tbody>
+      </table></div>
+    </details>
+    {% for k, m in errors.items() if k.startswith('fq_') %}<div class="err">{{ m }}</div>{% endfor %}
   </fieldset>
 
   <fieldset><legend>Page sections</legend>

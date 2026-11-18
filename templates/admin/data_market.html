@@ -14,7 +14,7 @@
 <form method="post" class="adm-form" style="max-width:none;padding-bottom:20px" data-grid>
   <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="country" value="{{ cid }}">
   <div class="table-scroll"><table class="dtable" id="market-grid">
-    <thead><tr><th>Sub-sector · vertical</th>{% for y in years %}<th style="text-align:right">{{ y }}{{ 'E' if y == year_now else ('F' if y > year_now else '') }}</th>{% endfor %}<th style="text-align:right">Growth % a year</th><th>Confidence</th></tr></thead>
+    <thead><tr><th>Sub-sector · vertical</th>{% for y in years %}<th style="text-align:right">{{ y }}{{ ysuf(y) }}</th>{% endfor %}<th style="text-align:right">Growth % a year</th><th>Confidence</th></tr></thead>
     <tbody>
     {% for row in grid %}
       <tr>
@@ -35,7 +35,7 @@
   <summary><b>Import many rows from a CSV</b></summary>
   <form method="post" action="{{ url_for('admin_market_import') }}" enctype="multipart/form-data" class="adm-form" style="padding:14px 0 0">
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-    <p class="muted" style="margin:0">Columns: <code>country</code>, <code>sub-sector</code>, <code>vertical</code>, an optional <code>confidence</code> (a level name such as “Reported” or “Low”), then years such as <code>2021</code> to <code>{{ years[-1] }}</code>. Use the names or ids you set up. Blank years are filled in. The easiest way to start is to download the CSV above, edit it in a spreadsheet and upload it again. If anything is wrong, nothing is imported.</p>
+    <p class="muted" style="margin:0">Columns: <code>country</code>, <code>sub-sector</code>, <code>vertical</code>, an optional <code>confidence</code> (a level name such as “Reported” or “Low”), then years such as <code>{{ years[0] }}</code> to <code>{{ years[-1] }}</code>. Use the names or ids you set up. Blank years are filled in. The easiest way to start is to download the CSV above, edit it in a spreadsheet and upload it again. If anything is wrong, nothing is imported.</p>
     <div class="upload-row"><input type="file" name="file" accept=".csv,text/csv" required></div>
     <label class="checkrow"><input type="radio" name="mode" value="merge" checked><span>Update the rows in the file and keep everything else</span></label>
     <label class="checkrow"><input type="radio" name="mode" value="replace"><span>Replace all market sizes with the rows in the file</span></label>

@@ -78,8 +78,8 @@ def _paper_charts():
         v = d.market_series({"subsector": s["id"]})
         subs.append((s["name"], round(100 * d.cagr(v[d.IDX2026], v[-1], len(v) - 1 - d.IDX2026), 1)))
     subs.sort(key=lambda r: r[1], reverse=True)
-    hbar = _chart("hbar", "Expected growth to 2030 by sub-sector", "% a year", ["Sub-sector", "Growth"], subs)
-    years = [2021, 2023, 2026, 2028, 2030]
+    hbar = _chart("hbar", f"Expected growth to {d.YEARS[-1]} by sub-sector", "% a year", ["Sub-sector", "Growth"], subs)
+    years = [2021, 2023, 2026, 2028, d.YEARS[-1]]
     rows = []
     for y in years:
         i = d.YEARS.index(y)
@@ -110,7 +110,7 @@ def seed_reports():
         body = f"{r['summary']}\n\n"
         if i == 0:
             rows = [(y, round(v)) for y, v in zip(d.YEARS, d.market_series({}))]
-            body += _chart("bar", "Global market size, 2021 to 2030", "US$ bn", ["Year", "Market size"], rows, "Global Market Outlook 2027 (sample)") + "\n\n"
+            body += _chart("bar", f"Global market size, 2021 to {d.YEARS[-1]}", "US$ bn", ["Year", "Market size"], rows, "Global Market Outlook 2027 (sample)") + "\n\n"
             body += "The chart above is a sample finding from the report. The full report breaks the market down by country, sub-sector and vertical.\n"
         out.append({"slug": r["slug"], "title": r["title"], "summary": r["summary"], "body": body, "date": r["date"], "author": "Meridian Research",
                     "tags": [r["category"]], "status": "published",

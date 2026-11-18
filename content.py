@@ -6,9 +6,9 @@ WHITE_PAPERS = [
         "title": "The next decade of market growth: where value is shifting",
         "date": "2026-10-28", "read_min": 18, "pages": 24, "author": "Meridian Research",
         "tags": ["Market outlook", "Strategy"],
-        "summary": "Growth is concentrating in a narrower set of countries, sub-sectors and customer groups. We map where incremental value will be created to 2030 and what leaders are doing differently.",
+        "summary": "Growth is concentrating in a narrower set of countries, sub-sectors and customer groups. We map where incremental value will be created to 2031 and what leaders are doing differently.",
         "takeaways": [
-            "Roughly two-thirds of incremental market value to 2030 will come from digital platforms and services.",
+            "Roughly two-thirds of incremental market value to 2031 will come from digital platforms and services.",
             "Emerging markets are outgrowing mature economies by 3 to 5 percentage points a year.",
             "Leaders are rebalancing portfolios toward faster-growing sub-sectors before demand peaks.",
         ],
@@ -117,10 +117,10 @@ REPORTS = [
     {
         "slug": "global-market-outlook-2027",
         "title": "Global Market Outlook 2027",
-        "subtitle": "Market size, growth drivers and forecasts to 2030 across 12 countries",
+        "subtitle": "Market size, growth drivers and forecasts to 2031 across 12 countries",
         "price": 4950, "pages": 212, "date": "2026-11-03", "coverage": "Global", "category": "Market sizing",
         "summary": "Our flagship annual report sizing the market by country, sub-sector and vertical, with five-year forecasts, scenario analysis and competitive landscape.",
-        "highlights": ["Market model of 360 country, sub-sector and vertical cells", "Base, upside and downside scenarios to 2030", "Profiles of 46 leading companies", "Excel data pack with all forecasts"],
+        "highlights": ["Market model of 360 country, sub-sector and vertical cells", "Base, upside and downside scenarios to 2031", "Profiles of 46 leading companies", "Excel data pack with all forecasts"],
         "toc": ["Executive summary", "Market definition and methodology", "Global market size and forecast", "Country deep dives", "Sub-sector analysis", "Vertical analysis", "Competitive landscape", "Scenarios and risks", "Data appendix"],
     },
     {
@@ -147,7 +147,7 @@ REPORTS = [
         "subtitle": "China, Japan, India and Singapore: the fastest-growing region",
         "price": 2950, "pages": 148, "date": "2026-09-08", "coverage": "Asia-Pacific", "category": "Regional",
         "summary": "Details how growth differs across Asia-Pacific economies and where international and local players are winning.",
-        "highlights": ["Country growth drivers", "Local versus international share", "Entry and partnership options", "Forecasts to 2030"],
+        "highlights": ["Country growth drivers", "Local versus international share", "Entry and partnership options", "Forecasts to 2031"],
         "toc": ["Executive summary", "Regional overview", "Country profiles", "Competitive dynamics", "Entry strategies", "Outlook"],
     },
     {

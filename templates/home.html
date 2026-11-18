@@ -69,7 +69,7 @@
       <h2>The market in {{ year_now }}</h2>
       <p class="muted" style="max-width:30em">The global market is estimated at US${{ '{:,.0f}'.format(stats.global_2026) }} bn in {{ year_now }}. The five largest countries account for most of it, and growth is moving toward faster-growing economies and digital delivery.</p>
       <table class="data" style="max-width:30em;margin-bottom:18px">
-        <thead><tr><th>Country</th><th>{{ year_now }}E (US$ bn)</th><th>Share</th></tr></thead>
+        <thead><tr><th>Country</th><th>{{ now_lbl }} (US$ bn)</th><th>Share</th></tr></thead>
         <tbody>
         {% for r in top_countries %}
           <tr><td class="name"><a href="{{ url_for('dashboard', country=r.id, view='subsector') }}">{{ r.name }}</a></td><td>{{ fmt_bn(r.size) }}</td><td>{{ fmt_pct(r.share, 0) }}</td></tr>

@@ -10,6 +10,7 @@ import config as cfg
 import data as d
 import dataio
 import db
+import timeline
 
 YEARS = cfg.YEARS
 FLAG_RE = re.compile(r"^[a-z]{2}(-[a-z0-9]{2,3})?$")
@@ -262,7 +263,7 @@ def register(app, admin_required, paginate):
                 ci, si, vi = head.index("country"), head.index("subsector"), head.index("vertical")
                 yi = {y: head.index(str(y)) for y in YEARS if str(y) in head}
             except ValueError:
-                errors.append("The first row must have the columns: country, sub-sector, vertical, then years such as 2021 to 2030.")
+                errors.append(f"The first row must have the columns: country, sub-sector, vertical, then years such as {YEARS[0]} to {YEARS[-1]}.")
             for n, r in enumerate(rows[1:] if not errors else [], start=2):
                 if not any(x.strip() for x in r):
                     continue
@@ -322,7 +323,7 @@ def register(app, admin_required, paginate):
         return render_template("admin/data_companies.html", rows=items, total=len(rows), page=page, pages=pages, q=q, show=show,
                                params={"q": q or None, "show": show or None}, section="data")
 
-    def _company_form(co, fin):
+    def _company_form(co, fin, fin_q=()):
         """Flat dict of string values for the company form."""
         f = {"name": co.get("name", ""), "hq": co.get("hq", ""), "city": co.get("city", ""), "ownership": co.get("ownership", "Private"),
              "ticker": co.get("ticker") or "", "exchange": co.get("exchange") or "", "founded": co.get("founded") or "",
@@ -337,7 +338,21 @@ def register(app, admin_required, paginate):
                 f[f"fin_{r['year']}_{k}"] = f"{r[k]:.1f}" if r.get(k) is not None else ""
             f[f"fin_{r['year']}_employees"] = str(r["employees"]) if r.get("employees") is not None else ""
             f[f"fin_{r['year']}_conf"] = r.get("conf_raw") or ""
+        for r in fin_q:
+            p = f"fq_{r['year']}_{r['quarter']}_"
+            for k in ("revenue", "ebitda", "net_income", "capex"):
+                f[p + k] = f"{r[k]:.1f}" if r.get(k) is not None else ""
+            f[p + "conf"] = r.get("conf_raw") or ""
         return f
+
+    def _qraw(slug):
+        """The quarters actually entered for a company (the stored figures, without projected quarters)."""
+        return [r for r in d.STORE.fin_q.get(slug, []) if not r["projected"]]
+
+    def _q_slots(slug):
+        """The quarters the company form covers: from two years back (or the earliest quarter with data) to the current quarter."""
+        first = min([cfg.ESTIMATE_YEAR - 2] + [r["year"] for r in _qraw(slug)]) if slug else cfg.ESTIMATE_YEAR - 2
+        return timeline.quarter_slots(first)
 
     @app.route("/admin/data/companies/new", methods=["GET", "POST"])
     @app.route("/admin/data/companies/<slug>", methods=["GET", "POST"])
@@ -394,6 +409,18 @@ def register(app, admin_required, paginate):
                         vals["employees"] = int(vals["employees"])
                     lvl = form.get(f"fin_{y}_conf")
                     fin_rows.append({"year": y, **vals, "conf": lvl if lvl in dataio.LEVEL else None})
+            q_rows, q_slots = [], _q_slots(slug)
+            for y, q in q_slots:
+                vals, any_val, p = {}, False, f"fq_{y}_{q}_"
+                for k in ("revenue", "ebitda", "net_income", "capex"):
+                    txt = (form.get(p + k) or "").strip()
+                    any_val = any_val or bool(txt)
+                    vals[k] = _num(txt, f"{timeline.qlabel(y, q)} {k.replace('_', ' ')}", errors, p + k, minimum=(None if k in ("ebitda", "net_income") else 0.0))
+                if any_val:
+                    if vals["revenue"] is None and p + "revenue" not in errors:
+                        errors[p + "revenue"] = f"Enter revenue for {timeline.qlabel(y, q)}, or clear the row."
+                    lvl = form.get(p + "conf")
+                    q_rows.append({"year": y, "quarter": q, **vals, "conf": lvl if lvl in dataio.LEVEL else None})
             if not errors:
                 is_new = existing is None
                 taken = set(d.STORE.companies)
@@ -402,20 +429,24 @@ def register(app, admin_required, paginate):
                         "ticker": (form.get("ticker") or "").strip()[:12], "exchange": (form.get("exchange") or "").strip()[:20],
                         "founded": founded, "market_cap": mcap, "description": (form.get("description") or "").strip()[:5000], "alloc": alloc}
                 dataio.save_company(slug, name[:120], data)
-                dataio.save_fin(slug, fin_rows)
+                dataio.save_fin(slug, fin_rows, clear=dataio.FIN_YEARS)
+                dataio.save_fin_q(slug, q_rows, clear=q_slots)
                 dataio.save_values("company", slug, _read_section_values("company"))
                 flash(("Added " if is_new else "Saved ") + name + ".", "ok")
                 return redirect(url_for("admin_company", slug=slug))
             flash("Some fields need attention. They are marked below, and nothing was saved.", "error")
         if not form:
-            form = _company_form(existing or {}, d.STORE.fin.get(slug, []) if existing else [])
+            form = _company_form(existing or {}, d.STORE.fin_raw.get(slug, []) if existing else [], _qraw(slug) if existing else [])
         inputs = _section_inputs("company", slug) if slug else [{**s, "value": ""} for s in d.SECTIONS["defs"] if s["entity"] == "company"]
         if request.method == "POST":
             for i in inputs:
                 i["value"] = form.get("sec_" + i["id"], "")
         sums = {dim: round(sum(float(form.get(f"alloc_{dim}_{k}") or 0) if re.match(r"^[0-9.]+$", form.get(f"alloc_{dim}_{k}") or "") else 0 for k in d.DIM_LOOKUP[dim]), 1) for dim in dataio.DIM_KINDS}
         return render_template("admin/data_company.html", co=existing, form=form, errors=errors, inputs=inputs, fin_years=dataio.FIN_YEARS,
-                               ownership=dataio.OWNERSHIP, sums=sums, last_actual=cfg.LAST_ACTUAL, section="data")
+                               ownership=dataio.OWNERSHIP, sums=sums, last_actual=cfg.LAST_ACTUAL, section="data",
+                               q_slots=[{"y": y, "q": q, "label": timeline.qlabel(y, q), "status": timeline.quarter_status(y, q)} for y, q in _q_slots(slug)],
+                               q_years={r["year"] for r in _qraw(slug)} if existing else set(),
+                               has_q=bool(existing and _qraw(slug)), q_has_err=any(k.startswith("fq_") for k in errors))
 
     @app.route("/admin/data/companies/<slug>/delete", methods=["POST"])
     @admin_required
@@ -432,13 +463,15 @@ def register(app, admin_required, paginate):
     def admin_fin_csv():
         out = io.StringIO()
         w = csv.writer(out)
-        w.writerow(["company", "year", "revenue", "gross_margin_pct", "ebitda", "net_income", "capex", "employees", "confidence"])
+        w.writerow(["company", "year", "quarter", "revenue", "gross_margin_pct", "ebitda", "net_income", "capex", "employees", "confidence"])
+        num = lambda v: "" if v is None else round(v, 1)
         for slug, co in sorted(d.STORE.companies.items(), key=lambda kv: kv[1]["name"].lower()):
-            for r in d.STORE.fin.get(slug, []):
-                w.writerow([_safe(co["name"]), r["year"], *["" if r[k] is None else round(r[k], 1) for k in ("revenue",)],
-                            "" if r["gross_margin"] is None else round(r["gross_margin"] * 100, 1),
-                            *["" if r[k] is None else round(r[k], 1) for k in ("ebitda", "net_income", "capex")],
-                            "" if r["employees"] is None else r["employees"],
+            for r in d.STORE.fin_raw.get(slug, []):
+                w.writerow([_safe(co["name"]), r["year"], "", num(r["revenue"]), "" if r["gross_margin"] is None else round(r["gross_margin"] * 100, 1),
+                            num(r["ebitda"]), num(r["net_income"]), num(r["capex"]), "" if r["employees"] is None else r["employees"],
+                            dataio.LEVEL[r["conf_raw"] or dataio.fin_default_conf(r["year"])]["name"]])
+            for r in [x for x in d.STORE.fin_q.get(slug, []) if not x["projected"]]:
+                w.writerow([_safe(co["name"]), r["year"], r["quarter"], num(r["revenue"]), "", num(r["ebitda"]), num(r["net_income"]), num(r["capex"]), "",
                             dataio.LEVEL[r["conf"]]["name"]])
         return Response(out.getvalue(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=company-financials.csv"})
 
@@ -454,11 +487,11 @@ def register(app, admin_required, paginate):
         except ValueError as e:
             flash(str(e), "error")
             return redirect(url_for("admin_companies"))
-        errors, by_co = [], {}
+        errors, by_co, by_co_q = [], {}, {}
         head = [h.strip().lower() for h in rows[0]] if rows else []
         need = ["company", "year", "revenue"]
         if not rows or any(h not in head for h in need):
-            errors.append("The first row must include the columns company, year and revenue. Optional: gross_margin_pct, ebitda, net_income, capex, employees, confidence.")
+            errors.append("The first row must include the columns company, year and revenue. Optional: quarter (1 to 4, blank for a full year), gross_margin_pct, ebitda, net_income, capex, employees, confidence.")
         else:
             col = {h: head.index(h) for h in head}
             by_name, dupes = {}, set()
@@ -490,6 +523,18 @@ def register(app, admin_required, paginate):
                 if year not in dataio.FIN_YEARS:
                     errors.append(f"Row {n}: year must be between {dataio.FIN_YEARS[0]} and {dataio.FIN_YEARS[-1]}.")
                     continue
+                quarter = None
+                if get("quarter").strip():
+                    try:
+                        quarter = int(float(get("quarter")))
+                        if not 1 <= quarter <= 4:
+                            raise ValueError
+                    except ValueError:
+                        errors.append(f"Row {n}: quarter must be 1, 2, 3 or 4, or blank for a full year.")
+                        continue
+                    if timeline.qkey(year, quarter) > timeline.qkey(cfg.ESTIMATE_YEAR, timeline.CURRENT["q"]):
+                        errors.append(f"Row {n}: {timeline.qlabel(year, quarter)} is after the current quarter ({timeline.qlabel(cfg.ESTIMATE_YEAR, timeline.CURRENT['q'])}).")
+                        continue
                 if vals["revenue"] is None or vals["revenue"] < 0:
                     errors.append(f"Row {n}: revenue is required and cannot be negative.")
                     continue
@@ -503,13 +548,23 @@ def register(app, admin_required, paginate):
                     except ValueError:
                         errors.append(f"Row {n}: unknown confidence “{get('confidence').strip()}”. Use one of: " + ", ".join(lv["name"] for lv in dataio.LEVELS) + ".")
                         continue
-                by_co.setdefault(slug, []).append(vals)
+                if quarter is not None:
+                    qv = {k: vals[k] for k in ("year", "revenue", "ebitda", "net_income", "capex")}
+                    qv["quarter"] = quarter
+                    if "conf" in vals:
+                        qv["conf"] = vals["conf"]
+                    by_co_q.setdefault(slug, []).append(qv)
+                else:
+                    by_co.setdefault(slug, []).append(vals)
         if errors:
             flash("Nothing was imported. " + " ".join(errors), "error")
             return redirect(url_for("admin_companies"))
         for slug, rows_ in by_co.items():
             dataio.save_fin(slug, rows_, replace=False)
-        flash(f"Imported {sum(len(v) for v in by_co.values())} financial rows for {len(by_co)} companies.", "ok")
+        for slug, rows_ in by_co_q.items():
+            dataio.save_fin_q(slug, rows_, replace=False)
+        n_rows = sum(len(v) for v in by_co.values()) + sum(len(v) for v in by_co_q.values())
+        flash(f"Imported {n_rows} financial rows for {len(set(by_co) | set(by_co_q))} companies.", "ok")
         return redirect(url_for("admin_companies"))
 
     # ------------------------------------------------------------------
@@ -576,6 +631,51 @@ def register(app, admin_required, paginate):
         return redirect(url_for("admin_data"))
 
     # ------------------------------------------------------------------
+    # Timeline
+    # ------------------------------------------------------------------
+    @app.route("/admin/data/timeline", methods=["GET", "POST"])
+    @admin_required
+    def admin_timeline():
+        t = timeline.load()
+        if request.method == "POST":
+            action = request.form.get("action")
+            new = dict(t)
+            if action in ("advance_q", "advance_y"):
+                new = timeline.advance(t, 1 if action == "advance_q" else 4)
+                done = f"The dashboard is now as of {timeline.describe(new)['as_of']}."
+            elif action == "report_year":
+                new["last_actual_year"] = min(t["last_actual_year"] + 1, t["current_year"])
+                done = f"Annual data now counts as reported up to {new['last_actual_year']}."
+            elif action == "report_quarter":
+                y, q = t["last_actual_q"]
+                y, q = (y + 1, 1) if q == 4 else (y, q + 1)
+                new["last_actual_q"] = [y, q]
+                done = f"Company quarters now count as reported up to {timeline.qlabel(y, q)}."
+            elif action == "save":
+                try:
+                    new = {**t, **{k: int(request.form[k]) for k in ("first_year", "last_year", "current_year", "current_quarter", "last_actual_year")},
+                           "last_actual_q": [int(request.form["laq_year"]), int(request.form["laq_quarter"])]}
+                except (KeyError, ValueError):
+                    flash("Enter whole numbers for the years and quarters.", "error")
+                    return redirect(url_for("admin_timeline"))
+                done = "Timeline saved."
+            else:
+                abort(400)
+            clean, errors = timeline.clean(new)
+            if errors:
+                flash(" ".join(errors) + " Nothing was changed.", "error")
+            elif new == t:
+                flash("Nothing to change.", "ok")
+            else:
+                timeline.save(clean)
+                flash(done, "ok")
+            return redirect(url_for("admin_timeline"))
+        cy = t["current_year"]
+        missing = [c for s, c in d.STORE.companies.items() if c["has_split"] and not any(r["year"] == cy and not r.get("extrapolated") and r.get("q_reported") != 0 for r in d.STORE.fin.get(s, []))]
+        return render_template("admin/data_timeline.html", t=t, info=timeline.describe(t), missing=len(missing), n_companies=len(d.STORE.companies),
+                               nxt=timeline.describe(timeline.advance(t, 1)), nxt_y=timeline.describe(timeline.advance(t, 4)), section="data")
+
+    # ------------------------------------------------------------------
     # Reset
     # ------------------------------------------------------------------
     @app.route("/admin/data/reset", methods=["POST"])
@@ -587,6 +687,7 @@ def register(app, admin_required, paginate):
                 c.execute("DELETE FROM market")
                 c.execute("DELETE FROM companies")
                 c.execute("DELETE FROM fin")
+                c.execute("DELETE FROM fin_q")
                 c.execute("DELETE FROM section_values")
                 db.bump(c)
             dataio.scrub_all_company_news()

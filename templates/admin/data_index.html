@@ -32,7 +32,7 @@
   <li>Market sizes are in US$ billions, one row per country, sub-sector and vertical. Leave years blank and they are filled in for you.</li>
   <li>A company's revenue (US$ millions) comes from its financials. Its split by country, sub-sector and vertical decides which dashboard slices it appears in.</li>
   <li>Years after your last reported revenue follow the growth of the markets the company sells into.</li>
-  <li>Years run {{ years[0] }} to {{ years[-1] }}. Company financials can be entered up to {{ year_now }}.</li>
+  <li>Years run {{ years[0] }} to {{ years[-1] }}, and the dashboard is as of {{ tl.as_of }}. Company financials can be entered up to {{ year_now }}, by year or by quarter. Move the dashboard on in <a href="{{ url_for('admin_timeline') }}">Timeline</a>.</li>
 </ul>
 
 <form method="post" action="{{ url_for('admin_data_notice') }}" class="adm-form" style="margin-top:26px;padding-bottom:0">

@@ -10,15 +10,17 @@ from datetime import date, timedelta
 
 import config as cfg
 
-YEARS = cfg.YEARS
+YEARS = list(cfg.YEARS)          # a snapshot of the default timeline: the sample is always built for it
+LAST_ACTUAL = cfg.LAST_ACTUAL
+ESTIMATE_YEAR = cfg.ESTIMATE_YEAR
 NY = len(YEARS)
 COUNTRIES = copy.deepcopy(cfg.COUNTRIES)
 SUBSECTORS = copy.deepcopy(cfg.SUBSECTORS)
 VERTICALS = copy.deepcopy(cfg.VERTICALS)
 def year_status(y):
-    if y <= cfg.LAST_ACTUAL:
+    if y <= LAST_ACTUAL:
         return "A"
-    if y == cfg.ESTIMATE_YEAR:
+    if y == ESTIMATE_YEAR:
         return "E"
     return "F"
 
@@ -73,10 +75,10 @@ def _market_cells(rng):
                 g = max(0.005, cfg.BASE_GROWTH + c["growth"] + s["growth"] + v["growth"])
                 vals = [base]
                 for i, y in enumerate(YEARS[1:], start=1):
-                    if y <= cfg.ESTIMATE_YEAR:
+                    if y <= ESTIMATE_YEAR:
                         gy = g + year_shock.get(y, 0) + rng.uniform(-0.010, 0.010)
                     else:
-                        gy = g * (0.97 ** (y - cfg.ESTIMATE_YEAR)) + rng.uniform(-0.004, 0.004)
+                        gy = g * (0.97 ** (y - ESTIMATE_YEAR)) + rng.uniform(-0.004, 0.004)
                     vals.append(vals[-1] * (1 + gy))
                 market[(c["id"], s["id"], v["id"])] = vals
                 growth[(c["id"], s["id"], v["id"])] = g
@@ -174,7 +176,7 @@ def _financials(rng, companies, company_cells):
         rows, margin = [], co["margin0"]
         for i, y in enumerate(YEARS):
             margin = max(0.03, min(0.45, margin + co["margin_trend"] + rng.uniform(-0.010, 0.010)))
-            if y > cfg.ESTIMATE_YEAR:
+            if y > ESTIMATE_YEAR:
                 rows.append(None)
                 continue
             ebitda = rev[i] * margin
