@@ -61,7 +61,7 @@
   {% endfor %}
 
   <div class="card" id="breakdown" style="margin-top:24px">
-    <div class="panel-title"><h3>Break down by</h3><span><a href="{{ url_for('dashboard', view=view) }}" class="small tbl-reset" data-active="{{ 1 if f else 0 }}"{% if not f %} hidden{% endif %}>Reset filters</a> <span class="small muted" style="margin-left:10px">Click a row to filter</span></span></div>
+    <div class="panel-title"><h3>Break down by</h3><span><a href="{{ url_for('dashboard', view=view) }}" class="small tbl-reset" data-active="{{ 1 if f else 0 }}"{% if not f %} hidden{% endif %}>Reset filters</a> <a href="{{ url_for('dashboard_export', view=view, **f) }}" class="small tbl-export" style="margin-left:10px" title="Download this table, with every year, as a CSV file that opens in Excel">Export data</a> <span class="small muted" style="margin-left:10px">Click a row to filter</span></span></div>
     <div class="tabs" role="tablist" style="margin-top:10px">
       {% for key, label in tabs %}
         {% set locked = key != 'company' and key in f %}
@@ -116,7 +116,7 @@
   </div>
 
   {% set show_trend = 'dashboard.trend' not in hidden and chart_lines %}
-  {% set show_heat = 'dashboard.heatmap' not in hidden and heat %}
+  {% set show_heat = 'dashboard.heatmap' not in hidden and heat and heat.rows %}
   {% if show_trend or show_heat %}
   <div class="dash-grid even" style="{{ 'grid-template-columns:1fr' if not (show_trend and show_heat) }}">
     {% if show_trend %}
@@ -132,16 +132,17 @@
     <div class="card">
       <div class="panel-title"><h3>Sub-sector by vertical, US$ bn</h3><span class="small muted">Click a cell to filter both</span></div>
       <div class="panel-body table-scroll">
-        <div class="heat" role="table" aria-label="Market size by sub-sector and vertical">
+        <div class="heat" role="table" aria-label="Market size by sub-sector and vertical" style="--cols: {{ heat.cols|length }}">
           <div class="h"></div>
-          {% for v in VERT.values() %}<div class="h">{{ v.name }}</div>{% endfor %}
-          {% for row in heat %}
+          {% for v in heat.cols %}<div class="h" title="{{ v.name }}">{{ v.name }}</div>{% endfor %}
+          {% for row in heat.rows %}
             <div class="rl">{{ row.sub.name }}</div>
             {% for c in row.cells %}
-              <a class="cell {{ 'hi' if c.intensity > 0.5 }} {{ 'active' if c.active }}" href="{{ c.url }}" style="background:rgba(34,81,255,{{ '%.2f'|format(0.07 + 0.88 * c.intensity) }})">{{ fmt_bn(c.value, 1 if c.value < 10 else 0) }}</a>
+              <a class="cell {{ 'hi' if c.intensity > 0.62 }} {{ 'active' if c.active }}" href="{{ c.url }}" style="background:rgba(var(--accent-rgb),{{ '%.2f'|format(0.07 + 0.88 * c.intensity) }})">{{ fmt_bn(c.value, 1 if c.value < 10 else 0) }}</a>
             {% endfor %}
           {% endfor %}
         </div>
+        {% if heat.trimmed %}<p class="small muted" style="margin:10px 0 0">Showing the {{ heat.rows|length }} largest of {{ heat.total_sub }} sub-sectors and the {{ heat.cols|length }} largest of {{ heat.total_vert }} verticals{% if f.country %} in this country{% endif %}. Use the breakdown table for the rest.</p>{% endif %}
       </div>
     </div>
     {% endif %}

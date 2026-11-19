@@ -1,0 +1,14 @@
+{% extends "admin/base.html" %}
+{% block title %}Backup | {{ brand.name }}{% endblock %}
+{% block admin %}
+<h1 style="margin-top:28px">Backup</h1>
+<p class="muted">Download a copy of everything: the database (all content, users, dashboard data), your site settings uploaded images and report files. Keep it somewhere safe, away from the server.</p>
+{% if remind %}<div class="flash error" role="status">{% if when %}Your last backup was {{ days }} days ago.{% else %}You have not downloaded a backup yet.{% endif %} Download one every {{ remind_days }} days or so, and before any big change.</div>
+{% elif when %}<p>Last backup downloaded {{ when.strftime('%-d %b %Y, %H:%M') }} ({{ days }} day{{ '' if days == 1 else 's' }} ago).</p>{% endif %}
+<form method="post" action="{{ url_for('admin_backup_download') }}" style="margin:18px 0">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <button class="btn" type="submit">Download backup</button>
+</form>
+<p class="muted">To restore, put <code>site.db</code> into the <code>instance</code> folder (replacing the old one), <code>site.json</code> next to <code>app.py</code>, the uploads into <code>instance/uploads</code> and the report files into <code>instance/private</code>, then restart.</p>
+<p class="muted" style="margin-top:60px;font-size:13px"><a href="{{ url_for('admin_danger') }}">Advanced: clear or reset the data</a></p>
+{% endblock %}

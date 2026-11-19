@@ -5,6 +5,9 @@
   --primary-2: color-mix(in srgb, var(--primary) 86%, white);
   --accent: {{ t.accent }};
   --accent-rgb: {{ t.accent_rgb }};
+  --heading: {{ t.heading }};
+  --link: {{ t.link }};
+  --hl-on-primary: {{ t.hl_on_primary }};
   --accent-dark: color-mix(in srgb, var(--accent) 82%, black);
   --accent-tint: color-mix(in srgb, var(--accent) 12%, var(--background));
   --accent-tint-2: color-mix(in srgb, var(--accent) 7%, var(--background));
@@ -24,7 +27,7 @@
   --on-primary: {{ t.on_primary }};
   --on-primary-rgb: {{ t.on_primary_rgb }};
   --on-primary-muted: color-mix(in srgb, var(--on-primary) 74%, var(--primary));
-  --on-primary-dim: color-mix(in srgb, var(--on-primary) 55%, var(--primary));
+  --on-primary-dim: color-mix(in srgb, var(--on-primary) 68%, var(--primary));
   --on-primary-line: color-mix(in srgb, var(--on-primary) 20%, var(--primary));
   --on-accent: {{ t.on_accent }};
   --serif: {{ t.heading_font|safe }};

@@ -2,16 +2,20 @@
 import csv
 import io
 import json
+import os
 import re
 
 from flask import Response, abort, flash, redirect, render_template, request, url_for
 
 import config as cfg
 import data as d
+import backup
 import dataio
 import db
 import timeline
 
+from db import INSTANCE
+UPLOADS = os.path.join(INSTANCE, "uploads")
 YEARS = cfg.YEARS
 FLAG_RE = re.compile(r"^[a-z]{2}(-[a-z0-9]{2,3})?$")
 MAX_CSV = 2 * 1024 * 1024
@@ -295,6 +299,7 @@ def register(app, admin_required, paginate):
             flash("Nothing was imported. " + " ".join(errors[:10]), "error")
             return redirect(url_for("admin_market"))
         if request.form.get("mode") == "replace":
+            backup.auto_backup(UPLOADS, "replace-import")
             for key in list(d.STORE.market):
                 cells.setdefault(key, None)
         dataio.save_market(cells, confs)
@@ -679,28 +684,3 @@ def register(app, admin_required, paginate):
         missing = [c for s, c in d.STORE.companies.items() if c["has_split"] and not any(r["year"] == cy and not r.get("extrapolated") and r.get("q_reported") != 0 for r in d.STORE.fin.get(s, []))]
         return render_template("admin/data_timeline.html", t=t, info=timeline.describe(t), missing=len(missing), n_companies=len(d.STORE.companies),
                                nxt=timeline.describe(timeline.advance(t, 1)), nxt_y=timeline.describe(timeline.advance(t, 4)), section="data")
-
-    # ------------------------------------------------------------------
-    # Reset
-    # ------------------------------------------------------------------
-    @app.route("/admin/data/reset", methods=["POST"])
-    @admin_required
-    def admin_data_reset():
-        action = request.form.get("action")
-        if action == "clear":
-            with db.conn() as c:
-                c.execute("DELETE FROM market")
-                c.execute("DELETE FROM companies")
-                c.execute("DELETE FROM fin")
-                c.execute("DELETE FROM fin_q")
-                c.execute("DELETE FROM section_values")
-                db.bump(c)
-            dataio.scrub_all_company_news()
-            db.set_meta("sample_notice", "0")
-            flash("All market sizes, companies and financials were cleared. Countries, sub-sectors, verticals and sections were kept.", "ok")
-        elif action == "sample":
-            dataio.seed_sample()
-            flash("The sample dataset was restored.", "ok")
-        else:
-            abort(400)
-        return redirect(url_for("admin_data"))

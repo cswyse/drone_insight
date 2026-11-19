@@ -30,7 +30,7 @@ PRIVATE = os.path.join(ROOT, "instance", "private")
 os.makedirs(PRIVATE, exist_ok=True)
 EMAIL_RE = re.compile(r"^[^@\s,;<>\"']+@[^@\s,;<>\"']+\.[^@\s,;<>\"']+$")
 MIN_PW = 10
-TOPICS = ["Subscription", "Buying a single report", "Team or company licence", "Something else"]
+TOPICS = ["Subscription", "Buying a single report", "Request a demo", "Team or company licence", "Something else"]
 _hits = {}                       # rate limiting: key -> [timestamps]
 _DUMMY = generate_password_hash("not-a-real-password")
 
@@ -108,7 +108,7 @@ def register(app, admin_required, paginate, is_admin):
             return fn(*a, **kw)
         return wrapper
 
-    for ep, api in (("dashboard", False), ("company", False), ("api_market", True), ("api_company", True)):
+    for ep, api in (("dashboard", False), ("dashboard_export", False), ("company", False), ("api_market", True), ("api_company", True)):
         app.view_functions[ep] = subscribers_only(app.view_functions[ep], api)
 
     # ------------------------------------------------------------------
@@ -324,45 +324,74 @@ def register(app, admin_required, paginate, is_admin):
     # ------------------------------------------------------------------
     # Report files (subscribers only; stored outside the public uploads folder)
     # ------------------------------------------------------------------
+    DATA_EXT = {"csv", "xlsx", "xls"}
+
+    def _data_ok(head, ext):
+        if ext == "xlsx":
+            return head.startswith(b"PK\x03\x04")
+        if ext == "xls":
+            return head.startswith(b"\xd0\xcf\x11\xe0")
+        return b"\x00" not in head                       # csv: plain text
+
     @app.route("/reports/<slug>/download")
-    def report_download(slug):
+    @app.route("/reports/<slug>/download/<which>")
+    def report_download(slug, which="pdf"):
         r = db.get_by_slug("report", slug, published_only=not is_admin())
-        if not r or not r["meta"].get("file"):
+        key = "data_file" if which == "data" else "file"
+        if which not in ("pdf", "data") or not r or not r["meta"].get(key):
             abort(404)
         if not can("subscriber"):
             return gate_response("subscriber")
-        name = os.path.basename(r["meta"]["file"])
+        name = os.path.basename(r["meta"][key])
+        if which == "data":
+            ext = name.rsplit(".", 1)[-1]
+            return send_from_directory(PRIVATE, name, as_attachment=True, download_name=f"{r['slug']}-data.{ext}")
         return send_from_directory(PRIVATE, name, as_attachment=True, download_name=f"{r['slug']}.pdf", mimetype="application/pdf")
 
     @app.route("/admin/reports/<int:post_id>/file", methods=["POST"])
+    @app.route("/admin/reports/<int:post_id>/file/<which>", methods=["POST"])
     @admin_required
-    def admin_report_file(post_id):
+    def admin_report_file(post_id, which="pdf"):
+        """Attach, replace or remove a report's PDF (which=pdf) or data file (which=data: csv, xlsx or xls)."""
         p = db.get(post_id)
-        if not p or p["kind"] != "report":
+        if not p or p["kind"] != "report" or which not in ("pdf", "data"):
             abort(404)
+        key, label = ("data_file", "Data file") if which == "data" else ("file", "PDF")
+        back = redirect(url_for("admin_edit", section="reports", post_id=post_id))
         meta = dict(p["meta"])
-        if request.form.get("remove") and meta.get("file"):
-            try:
-                os.remove(os.path.join(PRIVATE, os.path.basename(meta["file"])))
-            except OSError:
-                pass
-            meta.pop("file", None)
-            flash("Report file removed.", "ok")
+
+        def drop():
+            if meta.get(key):
+                try:
+                    os.remove(os.path.join(PRIVATE, os.path.basename(meta[key])))
+                except OSError:
+                    pass
+                meta.pop(key, None)
+
+        if request.form.get("remove"):
+            drop()
+            flash(f"{label} removed.", "ok")
         else:
             f = request.files.get("file")
             head = f.stream.read(8) if f and f.filename else b""
             if f:
                 f.stream.seek(0)
-            if not head.startswith(b"%PDF"):
-                flash("Choose a PDF file.", "error")
-                return redirect(url_for("admin_edit", section="reports", post_id=post_id))
-            name = uuid.uuid4().hex + ".pdf"
+            if which == "pdf":
+                ext, good = "pdf", head.startswith(b"%PDF")
+            else:
+                ext = f.filename.rsplit(".", 1)[-1].lower() if f and "." in (f.filename or "") else ""
+                good = ext in DATA_EXT and _data_ok(head, ext)
+            if not good:
+                flash("Choose a PDF file." if which == "pdf" else "Choose an Excel (.xlsx, .xls) or CSV file.", "error")
+                return back
+            drop()
+            name = uuid.uuid4().hex + "." + ext
             f.save(os.path.join(PRIVATE, name))
-            meta["file"] = name
-            flash("Report file uploaded. Subscribers can now download it.", "ok")
+            meta[key] = name
+            flash(f"{label} uploaded. Subscribers can now download it.", "ok")
         p["meta"] = meta
         db.save("report", p, post_id)
-        return redirect(url_for("admin_edit", section="reports", post_id=post_id))
+        return back
 
     # ------------------------------------------------------------------
     # Admin: users, mailing list, messages

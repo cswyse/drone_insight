@@ -1,0 +1,20 @@
+{% extends "admin/base.html" %}
+{% block title %}Reset data | {{ brand.name }}{% endblock %}
+{% block admin %}
+<h1 style="margin-top:28px">Clear or reset data</h1>
+<p class="muted">These actions delete dashboard data in bulk. A backup is saved automatically first, but they are still hard to undo.</p>
+{% if not enabled %}
+<div class="flash error">Switched off. To use them, the person running the server must set <code>ENABLE_DATA_RESET=1</code> and restart, then switch it off again afterwards. This means someone who only has the admin password cannot wipe the data.</div>
+{% endif %}
+{% if error %}<div class="flash error" role="alert">{{ error }}</div>{% endif %}
+{% for act, title, text in [('clear', 'Clear all figures', 'Deletes every market size, company and financial figure. Countries, sub-sectors, verticals and sections are kept.'), ('sample', 'Replace with sample data', 'Replaces ALL dashboard data, including your lists, sections and timeline, with the sample data.')] %}
+<form method="post" class="danger-zone" autocomplete="off">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="{{ act }}">
+  <h3 style="margin-top:0">{{ title }}</h3>
+  <p class="muted">{{ text }}</p>
+  <div class="field"><label for="pw-{{ act }}">Admin password</label><input id="pw-{{ act }}" type="password" name="password" autocomplete="off" {{ 'disabled' if not enabled }}></div>
+  <div class="field"><label for="ph-{{ act }}">Type <strong>{{ phrases[act] }}</strong> to confirm</label><input id="ph-{{ act }}" type="text" name="phrase" autocomplete="off" {{ 'disabled' if not enabled }}></div>
+  <button class="btn small outline" type="submit" {{ 'disabled' if not enabled }}>{{ title }}</button>
+</form>
+{% endfor %}
+{% endblock %}

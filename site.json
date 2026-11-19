@@ -10,13 +10,13 @@
     "logo_height": 30
   },
   "theme": {
-    "primary": "#051C2C",
-    "accent": "#2251FF",
-    "highlight": "#00A9F4",
-    "ink": "#1B2733",
-    "muted": "#566677",
-    "line": "#D8DEE5",
-    "soft": "#F3F5F8",
+    "primary": "#0B2A6F",
+    "accent": "#0B7A4B",
+    "highlight": "#6EA8FF",
+    "ink": "#16213A",
+    "muted": "#566386",
+    "line": "#D9E0F0",
+    "soft": "#F3F5FB",
     "background": "#FFFFFF",
     "positive": "#0B7A4B",
     "negative": "#B3261E",
@@ -29,12 +29,15 @@
   },
   "charts": {
     "series": [
-      "#2a78d6",
-      "#eb6834",
-      "#1baf7a",
-      "#eda100",
-      "#e87ba4"
+      "#2A78D6",
+      "#EB6834",
+      "#1BAF7A",
+      "#EDA100",
+      "#E87BA4"
     ]
+  },
+  "hero": {
+    "style": "rings"
   },
   "pagination": {
     "news": 10,

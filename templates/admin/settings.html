@@ -43,7 +43,7 @@
   </fieldset>
 
   <fieldset><legend>Colours</legend>
-    <p class="hint" style="margin-top:0">Start from a preset, then adjust. Text on dark colours switches between white and black automatically.</p>
+    <p class="hint" style="margin-top:0">Start from a preset, then adjust. Text on your colours switches between white and black automatically, and headings and links are adjusted if a colour would be hard to read.</p>
     <div class="presets" style="margin-bottom:18px">
       {% for pname, pv in presets.items() %}<button type="button" class="preset" data-preset='{{ pv|tojson }}'><i style="background:{{ pv.primary }}"></i><i style="background:{{ pv.accent }}"></i><i style="background:{{ pv.highlight }}"></i>{{ pname }}</button>{% endfor %}
     </div>
@@ -52,6 +52,13 @@
       <div class="swatch"><label for="color_{{ key }}">{{ label }}</label>
         <div class="pick"><input type="color" value="{{ s.theme[key] }}" data-for="color_{{ key }}" aria-label="{{ label }} picker"><input id="color_{{ key }}" name="color_{{ key }}" type="text" value="{{ s.theme[key] }}" maxlength="7" data-var="{{ key }}"></div></div>
       {% endfor %}
+    </div>
+  </fieldset>
+
+  <fieldset><legend>Homepage header</legend>
+    <p class="hint" style="margin-top:0">The animated 3D graphic on the homepage. It uses your theme colours and stays still for visitors who prefer reduced motion.</p>
+    <div class="hero-opts">
+      {% for key, label, desc in hero_styles %}<label class="hero-opt"><input type="radio" name="hero_style" value="{{ key }}" {{ 'checked' if s.hero.style == key }}><span><b>{{ label }}</b><small>{{ desc }}</small></span></label>{% endfor %}
     </div>
   </fieldset>
 
@@ -94,18 +101,22 @@
 </form>
 <style>
   .live { border: 1px solid var(--line); font-family: var(--sans); color: var(--ink); background: var(--background); }
-  .live h3 { font-family: var(--serif); font-weight: var(--heading-weight); margin: 0 0 8px; color: var(--primary); }
+  .live h3 { font-family: var(--serif); font-weight: var(--heading-weight); margin: 0 0 8px; color: var(--heading); }
   .live-hero { background: var(--primary); color: var(--on-primary); padding: 26px; }
   .live-hero h3 { color: var(--on-primary); font-size: 1.5rem; }
   .live-name { font-family: var(--serif); display: block; margin-bottom: 14px; }
   .live-hero .btn { background: var(--accent); color: var(--on-accent); }
   .live-body { padding: 22px 26px; }
-  .live-body a { color: var(--accent); }
+  .live-body a { color: var(--link); }
   .live-card { border: 1px solid var(--line); padding: 14px; display: flex; justify-content: space-between; align-items: flex-end; border-radius: var(--radius); background: var(--background); }
   .live-hero .btn, .live-card { border-radius: var(--radius); }
   .live-bars { display: flex; gap: 6px; align-items: flex-end; height: 44px; }
   .live-bars i { width: 14px; background: var(--accent); display: block; }
   .live-bars i:last-child { background: var(--highlight); }
+  .hero-opts { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+  .hero-opt { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--line); padding: 12px 14px; cursor: pointer; }
+  .hero-opt:has(input:checked) { border-color: var(--accent); background: var(--accent-tint-2); }
+  .hero-opt small { display: block; color: var(--muted); font-size: .82rem; margin-top: 2px; }
 </style>
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='js/admin.js') }}"></script>{% endblock %}

@@ -1,6 +1,9 @@
 """Meridian Market Intelligence: Flask application (public site, dashboard, admin)."""
+import csv
 import hmac
+import io
 import os
+import re
 import secrets
 import time
 import uuid
@@ -16,6 +19,7 @@ import content
 import data as d
 import dataio
 import timeline
+import backup
 import datamgr
 import db
 import members
@@ -143,7 +147,7 @@ app.jinja_env.globals.update(
 @app.context_processor
 def inject():
     s = settings.load()
-    return {"brand": s["brand"], "theme_v": settings.version(), "fonts_url": s["theme"]["google_fonts_url"],
+    return {"brand": s["brand"], "hero_style": s["hero"]["style"], "theme_v": settings.version(), "fonts_url": s["theme"]["google_fonts_url"],
             "nav_active": request.endpoint, "hidden": dataio.hidden_blocks(), "sample_notice": db.get_meta("sample_notice", "1") == "1", "copyright_year": date.today().year, "year_now": cfg.ESTIMATE_YEAR, "tl": timeline.describe(), "cagr_h": d.cagr_years()[0], "cagr_f": d.cagr_years()[1], "now_lbl": f"{cfg.ESTIMATE_YEAR}{timeline.year_suffix(cfg.ESTIMATE_YEAR)}", "CONF": dataio.LEVEL, "CONF_LEVELS": dataio.LEVELS}
 
 
@@ -249,7 +253,7 @@ def dashboard():
         else:
             nf = {**f, view: r["id"]}
             r["url"] = url_for("dashboard", **nf, view=default_view(nf))
-    for row in heat:
+    for row in heat["rows"]:
         for c in row["cells"]:
             nf = {**f, "subsector": c["sub"], "vertical": c["vert"]}
             c["url"] = url_for("dashboard", **nf, view="company")
@@ -269,6 +273,51 @@ def dashboard():
                            n_companies=len(d.breakdown("company", f)[0]), news_params=dict(f),
                            tabs=[("country", "Country"), ("subsector", "Sub-sector"), ("vertical", "Vertical"),
                                  ("company", "Company")])
+
+
+@app.route("/dashboard/export")
+def dashboard_export():
+    """The table you are looking at on the dashboard, as a CSV (opens in Excel), with every year of data."""
+    f = get_filters()
+    view = request.args.get("view")
+    if view not in d.DIM_ORDER or (view != "company" and view in f):
+        view = default_view(f)
+    rows, total = d.breakdown(view, f)
+    h, fc = d.cagr_years()
+    company = view == "company"
+    unit = "US$ m" if company else "US$ bn"
+    now = f"{cfg.ESTIMATE_YEAR}{timeline.year_suffix(cfg.ESTIMATE_YEAR)}"
+    yrs = [f"{y}{timeline.year_suffix(y)}" for y in d.YEARS]
+    title = " / ".join(d.DIM_LOOKUP[k][v]["name"] for k, v in f.items()) if f else "Global market"
+    sel = lambda r: [round(v, 3) for v in r["series"]]
+    pct = lambda v: "" if v is None else round(v * 100, 2)
+    label = lambda r: dataio.LEVEL[r["conf"]]["name"] if r.get("conf") in dataio.LEVEL else ""
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow([f"{settings.load()['brand']['name']} export"])
+    w.writerow(["Selection", title])
+    w.writerow(["Broken down by", {"country": "Country", "subsector": "Sub-sector", "vertical": "Vertical", "company": "Company"}[view]])
+    w.writerow(["Unit", unit + (" (company revenue within the selection)" if company else "")])
+    w.writerow(["Timeline", timeline.describe()["note"] + " (E = estimate, F = forecast)"])
+    w.writerow(["Exported", date.today().isoformat()])
+    w.writerow([])
+    if company:
+        head = ["Company", "HQ", "Ownership", f"Revenue {now}", "Market share %", f"CAGR {h['from']}-{h['to']} %", f"CAGR {fc['from']}-{fc['to']} %", "EBITDA margin %", "Confidence"]
+    else:
+        head = [{"country": "Country", "subsector": "Sub-sector", "vertical": "Vertical"}[view], f"Size {now}", "Share of selection %", "YoY %", f"CAGR {h['from']}-{h['to']} %", f"CAGR {fc['from']}-{fc['to']} %", "Confidence"]
+    w.writerow(head + yrs)
+    for r in rows:
+        if company:
+            base = [r["name"], r["hq"], r["ownership"], round(r["size"], 3), pct(r["share"]), pct(r["cagr_hist"]), pct(r["cagr_fc"]), pct(r["ebitda_margin"]), label(r)]
+        else:
+            base = [r["name"], round(r["size"], 3), pct(r["share"]), pct(r["yoy"]), pct(r["cagr_hist"]), pct(r["cagr_fc"]), label(r)]
+        w.writerow(base + sel(r))
+    if not company:
+        t = d.summarize(total)
+        w.writerow(["Total", round(t["size"], 3), 100, pct(t["yoy"]), pct(t["cagr_hist"]), pct(t["cagr_fc"]), label({"conf": d.market_confidence(f)})] + sel(t))
+    slug = re.sub(r"[^a-z0-9]+", "-", f"{title}-{view}".lower()).strip("-")
+    return Response("\ufeff" + out.getvalue(), mimetype="text/csv",
+                    headers={"Content-Disposition": f'attachment; filename="{slug}-{date.today().isoformat()}.csv"'})
 
 
 @app.route("/company/<slug>")
@@ -758,7 +807,7 @@ def admin_settings():
             flash(" ".join(problems), "error")
         flash("Settings saved. The whole site now uses them.", "ok")
         return redirect(url_for("admin_settings"))
-    return render_template("admin/settings.html", s=current, presets=settings.PRESETS)
+    return render_template("admin/settings.html", s=current, presets=settings.PRESETS, hero_styles=settings.HERO_STYLES)
 
 
 @app.route("/admin/orders")
@@ -769,6 +818,7 @@ def admin_orders():
 
 members.register(app, admin_required, paginate, is_admin)
 datamgr.register(app, admin_required, paginate)
+backup.register(app, admin_required, UPLOADS, lambda pw: hmac.compare_digest(pw, admin_password()), _failed)
 
 
 if __name__ == "__main__":

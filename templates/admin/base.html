@@ -11,6 +11,7 @@
   <a href="{{ url_for('admin_users') }}" class="{{ 'on' if nav_active in ('admin_users','admin_user') }}">Users</a>
   <a href="{{ url_for('admin_messages') }}" class="{{ 'on' if nav_active == 'admin_messages' }}">Messages</a>
   <a href="{{ url_for('admin_orders') }}" class="{{ 'on' if nav_active == 'admin_orders' }}">Orders</a>
+  <a href="{{ url_for('admin_backup') }}" class="{{ 'on' if nav_active == 'admin_backup' }}">Backup</a>
   <a href="{{ url_for('admin_settings') }}" class="{{ 'on' if nav_active == 'admin_settings' }}">Settings</a>
   <span class="spacer"></span>
   <form method="post" action="{{ url_for('admin_logout') }}" class="inline-form"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button type="submit">Sign out</button></form>

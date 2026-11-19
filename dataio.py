@@ -482,6 +482,16 @@ def wipe_all():
             c.execute(f"DELETE FROM {t}")
 
 
+def clear_figures():
+    """Delete market sizes, companies and financials. Lists and sections are kept."""
+    with db.conn() as c:
+        for t in ("market", "companies", "fin", "fin_q", "section_values"):
+            c.execute(f"DELETE FROM {t}")
+        db.bump(c)
+    scrub_all_company_news()
+    db.set_meta("sample_notice", "0")
+
+
 def seed_sample():
     """Write the generated sample dataset (taxonomy, market, companies, financials) to the database."""
     st = sample_data.get()

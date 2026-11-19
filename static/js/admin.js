@@ -71,7 +71,8 @@
       var c = [0, 2, 4].map(function (i) { var v = parseInt(h.substr(i, 2), 16) / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
       return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
     }
-    function onColor(hex) { return lum(hex) < 0.35 ? '#FFFFFF' : '#0B1620'; }
+    function cr(a, b) { var x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+    function onColor(hex) { return cr(hex, '#FFFFFF') >= cr(hex, '#0B1620') ? '#FFFFFF' : '#0B1620'; }
     var VARS = { primary: '--primary', accent: '--accent', highlight: '--highlight', ink: '--ink', muted: '--muted', line: '--line', soft: '--soft', background: '--background', positive: '--pos', negative: '--neg' };
     function validHex(v) { return /^#[0-9a-fA-F]{6}$/.test(v); }
 
@@ -84,7 +85,9 @@
       $$('select[data-var]').forEach(function (s) { live.style.setProperty('--' + s.dataset.var, s.value); });
       var p = $('#color_primary').value, a = $('#color_accent').value;
       if (validHex(p)) live.style.setProperty('--on-primary', onColor(p));
-      if (validHex(a)) live.style.setProperty('--on-accent', onColor(a));
+      if (validHex(a)) { live.style.setProperty('--on-accent', onColor(a)); live.style.setProperty('--link', a); }
+      var bg = $('#color_background').value, ink = $('#color_ink').value;
+      if (validHex(p) && validHex(bg) && validHex(ink)) live.style.setProperty('--heading', cr(p, bg) >= 7 ? p : ink);
     }
     $$('input[type=color]').forEach(function (pick) {
       var txt = document.getElementById(pick.dataset.for);

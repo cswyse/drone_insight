@@ -41,14 +41,5 @@
   <div><button class="btn small outline" type="submit">Save</button></div>
 </form>
 
-<div class="danger-zone">
-  <h3 style="margin-top:0">Start over</h3>
-  <p class="muted">These replace data in bulk. Download your CSVs first if you want a copy.</p>
-  <form method="post" action="{{ url_for('admin_data_reset') }}" class="inline-form" onsubmit="return confirm('Delete every market size, company and financial figure? Countries, sub-sectors, verticals and sections are kept.')">
-    <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="clear">
-    <button class="btn small outline" type="submit">Clear all market sizes, companies and financials</button></form>
-  <form method="post" action="{{ url_for('admin_data_reset') }}" class="inline-form" onsubmit="return confirm('Replace ALL dashboard data, including your lists and sections, with the sample data?')">
-    <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="sample">
-    <button class="btn small outline" type="submit">Restore the sample data</button></form>
-</div>
+<p class="muted" style="margin:30px 0 70px">Keep a copy of your data safe in <a href="{{ url_for('admin_backup') }}">Backup</a>.</p>
 {% endblock %}

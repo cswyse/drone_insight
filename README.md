@@ -151,6 +151,17 @@ Market sizes are annual. A company can optionally report by quarter, and then:
 - **Companies active** = the number of companies with revenue in the current selection.
 - **News on a dashboard slice**: items for the exact selection first; if there are too few, it widens step by step (vertical, then sub-sector, then country).
 
+## Exporting dashboard data and attaching report files
+
+- **Export data** (Dashboard, "Break down by" panel) downloads the table you are looking at as a CSV that opens in Excel: the current filters and tab, the headline figures and every year of the timeline (marked E for estimate, F for forecast). It is for subscribers, like the dashboard.
+- **Report files:** each report can have a PDF, a data file (Excel `.xlsx`/`.xls` or `.csv`), or both. Upload them under the report's edit page in the admin. Subscribers see a download button for each one that is attached. Files are stored privately and are included in backups.
+
+## Backups and the guarded reset (Admin > Backup)
+
+- **Download backup** gives a zip with the database (`site.db`: all content, users and dashboard data), your settings (`site.json`) and uploaded images. The page shows when you last downloaded one and reminds you after 30 days. Keep copies away from the server.
+- To restore: put `site.db` in the `instance` folder, `site.json` next to `app.py`, and the images in `instance/uploads`, then restart.
+- **Clearing or replacing the data** is not on the Dashboard data page. It lives on a page linked only from the bottom of Backup, and it does nothing unless the server has `ENABLE_DATA_RESET=1` set (switch it on, restart, do the job, switch it off). Even then it needs the admin password and a typed phrase, locks after repeated wrong passwords, and saves a backup first in `instance/backups` (the last 10 are kept). A "replace" CSV import also saves a backup first.
+
 ## Featured images and flags
 
 - Every news article, white paper and report has a **Featured image** field in Admin (upload or paste a path). It shows as a small thumbnail on the home page, News, White papers and Reports cards, and at the top of the item's own page.
@@ -197,7 +208,7 @@ Europe, 280, 295
 ```
 ````
 
-- **Settings**: site name, tagline, logo, favicon, colours, fonts, corner radius, page width, chart colours and page sizes, with presets and a live preview. Values are stored in `site.json`, which you can also edit by hand. Everything (CSS, charts, globe) reads from it through `/theme.css`.
+- **Settings**: site name, tagline, logo, favicon, colours, fonts, corner radius, page width, chart colours and page sizes, with presets and a live preview. Values are stored in `site.json`, which you can also edit by hand. Everything (CSS, charts, hero) reads from it through `/theme.css`. There are a dozen presets, and text, headings and links adjust automatically so a light or unusual colour stays readable. **Homepage header** chooses between five animated 3D graphics (globe, lattice, orbits, waves, knot); all follow your colours and stand still for visitors who prefer reduced motion.
 - Authors are trusted: raw HTML in Markdown is allowed.
 
 Content lives in `instance/site.db` and uploads in `instance/uploads`. The sample content in `content.py` and `seed.py` is written only on first run. To start over, delete `instance/site.db` and restart.
@@ -241,7 +252,7 @@ seed.py         first-run sample content
 data.py         sample data generator and query layer
 content.py      white papers, reports, licence tiers
 templates/      Jinja pages
-static/         css, charts.js (dependency-free SVG charts), hero3d.js (canvas globe), admin.js
+static/         css, charts.js (dependency-free SVG charts), hero3d.js (canvas 3D hero: globe, lattice, orbits, waves, knot), admin.js
 ```
 
 All data is fictional. No external services or JavaScript libraries are required.

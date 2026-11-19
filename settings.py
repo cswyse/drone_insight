@@ -27,12 +27,20 @@ DEFAULTS = {
         "google_fonts_url": "", "heading_weight": "400", "radius": "0px", "max_width": "1200px",
     },
     "charts": {"series": ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4"]},
+    "hero": {"style": "globe"},
     "pagination": {"news": 10, "papers": 6, "reports": 6},
     "contact": {"email": ""},
     "pricing": {"subscriber_price": "Contact us for pricing", "subscriber_note": "Invoiced by arrangement. Access is switched on by our team."},
     "legal": {"version": "1.0", "updated": "2026-11-16"},
 }
 
+HERO_STYLES = [
+    ("globe", "Globe", "Dotted globe with connections travelling across it"),
+    ("lattice", "Lattice", "Nested solids turning inside each other, with light along the edges"),
+    ("rings", "Orbits", "Interlocking rings with points circling a core"),
+    ("mesh", "Waves", "A rippling surface in perspective"),
+    ("knot", "Knot", "A torus knot of flowing strands"),
+]
 COLOR_KEYS = ["primary", "accent", "highlight", "ink", "muted", "line", "soft", "background", "positive", "negative"]
 
 # One-click starting points in Admin > Settings
@@ -41,7 +49,16 @@ PRESETS = {
     "Forest": {"primary": "#0F2E24", "accent": "#0F7B5F", "highlight": "#5CC9A7", "ink": "#1A2A24", "muted": "#586A62", "line": "#D9E2DD", "soft": "#F2F6F4", "background": "#FFFFFF"},
     "Charcoal and amber": {"primary": "#1C1F26", "accent": "#D9730D", "highlight": "#F2A541", "ink": "#22252B", "muted": "#5E636D", "line": "#DEDFE3", "soft": "#F5F5F6", "background": "#FFFFFF"},
     "Burgundy": {"primary": "#2B0F1B", "accent": "#A31D4B", "highlight": "#E5708F", "ink": "#2A1A21", "muted": "#6A5560", "line": "#E6DCE0", "soft": "#F8F4F6", "background": "#FFFFFF"},
-    "Light and clean": {"primary": "#E9EEF5", "accent": "#1F5FD6", "highlight": "#2AA3D9", "ink": "#16202B", "muted": "#566677", "line": "#D8DEE5", "soft": "#F5F7FA", "background": "#FFFFFF"},
+    "Ocean": {"primary": "#08324A", "accent": "#0A66B2", "highlight": "#35C1E0", "ink": "#14232E", "muted": "#53687A", "line": "#D5E0E8", "soft": "#F1F6F9", "background": "#FFFFFF"},
+    "Slate and teal": {"primary": "#14232B", "accent": "#0B7285", "highlight": "#3CC4C0", "ink": "#1A2A31", "muted": "#58696F", "line": "#D8E2E4", "soft": "#F2F6F6", "background": "#FFFFFF"},
+    "Midnight and violet": {"primary": "#1A1535", "accent": "#5B3FD0", "highlight": "#A58BFF", "ink": "#211C3A", "muted": "#605B7A", "line": "#E1DEEC", "soft": "#F6F5FA", "background": "#FFFFFF"},
+    "Plum and gold": {"primary": "#2D1B3D", "accent": "#7A3E9D", "highlight": "#E6B450", "ink": "#2A2030", "muted": "#6A5E72", "line": "#E5DEEA", "soft": "#F8F5FA", "background": "#FFFFFF"},
+    "Graphite and red": {"primary": "#202225", "accent": "#C0272D", "highlight": "#FF7A7A", "ink": "#25272B", "muted": "#62666D", "line": "#E0E1E4", "soft": "#F5F5F6", "background": "#FFFFFF"},
+    "Warm stone": {"primary": "#2E2A26", "accent": "#9A5B13", "highlight": "#E0A458", "ink": "#2B2824", "muted": "#6B645B", "line": "#E2DCD3", "soft": "#F7F4EF", "background": "#FFFFFF"},
+    "Royal blue": {"primary": "#0B2A6F", "accent": "#1F4FD8", "highlight": "#6EA8FF", "ink": "#16213A", "muted": "#566386", "line": "#D9E0F0", "soft": "#F3F5FB", "background": "#FFFFFF"},
+    "Sage": {"primary": "#26352B", "accent": "#4F7A55", "highlight": "#A9D18E", "ink": "#222B25", "muted": "#5F6B62", "line": "#DDE4DE", "soft": "#F4F7F4", "background": "#FFFFFF"},
+    "Blush": {"primary": "#F6E3E7", "accent": "#B02A53", "highlight": "#E5708F", "ink": "#2A1A21", "muted": "#6A5560", "line": "#EAD9DE", "soft": "#FBF6F7", "background": "#FFFFFF"},
+    "Light blue": {"primary": "#E9EEF5", "accent": "#1F5FD6", "highlight": "#2AA3D9", "ink": "#16202B", "muted": "#566677", "line": "#D8DEE5", "soft": "#F5F7FA", "background": "#FFFFFF"},
 }
 
 HEX_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
@@ -110,9 +127,23 @@ def luminance(h):
     return 0.2126 * ch(r) + 0.7152 * ch(g) + 0.0722 * ch(b)
 
 
+def contrast(a, b):
+    la, lb = luminance(a), luminance(b)
+    return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+
+
 def on_color(h):
-    """Readable text colour (white or near-black) for a given background."""
-    return "#FFFFFF" if luminance(h) < 0.35 else "#0B1620"
+    """Readable text colour (white or near-black) for a given background: whichever has more contrast."""
+    return "#FFFFFF" if contrast(h, "#FFFFFF") >= contrast(h, "#0B1620") else "#0B1620"
+
+
+def readable(color, backgrounds, toward, ratio=4.5):
+    """Nudge `color` towards `toward` until it reaches the contrast ratio on every background."""
+    for step in range(0, 101, 4):
+        c = mix(toward, color, step)          # step% of the way to `toward`
+        if all(contrast(c, b) >= ratio for b in backgrounds):
+            return c
+    return toward
 
 
 def theme_context():
@@ -128,6 +159,10 @@ def theme_context():
         "on_primary": on_primary,
         "on_primary_rgb": ",".join(map(str, rgb(on_primary))),
         "on_accent": on_color(accent),
+        # Safe-by-default text colours, so any palette stays readable
+        "heading": primary if contrast(primary, bg) >= 7 else t["ink"],
+        "link": readable(accent, [bg, t["soft"]], t["ink"]),
+        "hl_on_primary": readable(t["highlight"], [primary], on_primary, 3.0),
         "chart_actual": primary if luminance(primary) < 0.6 else t["ink"],
         "chart_estimate": accent,
         "chart_forecast": mix(accent, bg, 42),
@@ -178,6 +213,8 @@ def clean_settings(form, current, files_saved):
         t["heading_weight"] = form["heading_weight"]
     if form.get("radius") in ("0px", "2px", "4px", "8px", "12px"):
         t["radius"] = form["radius"]
+    if form.get("hero_style") in [h[0] for h in HERO_STYLES]:
+        s["hero"]["style"] = form["hero_style"]
     series = [clean_hex(form.get("series_%d" % i), s["charts"]["series"][i]) for i in range(5)]
     s["charts"]["series"] = series
     for key in ("news", "papers", "reports"):

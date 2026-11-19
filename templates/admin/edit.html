@@ -92,15 +92,17 @@
   </div>
 </form>
 {% if section == 'reports' and post %}
-<form method="post" action="{{ url_for('admin_report_file', post_id=post.id) }}" enctype="multipart/form-data" class="adm-form" style="margin-top:28px">
+{% for which, key, title, text, accept, btn in [('pdf', 'file', 'Report PDF (subscribers only)', 'Upload the full report as a PDF.', 'application/pdf', 'Upload PDF'), ('data', 'data_file', 'Report data file (subscribers only)', 'Optional. Upload the data behind the report as Excel (.xlsx or .xls) or CSV. You can attach the PDF, the data file or both.', '.xlsx,.xls,.csv', 'Upload data file')] %}
+<form method="post" action="{{ url_for('admin_report_file', post_id=post.id, which=which) }}" enctype="multipart/form-data" class="adm-form" style="margin-top:28px">
   <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-  <fieldset><legend>Report file (subscribers only)</legend>
-    <p class="muted" style="margin-top:0">Upload the full report as a PDF. Only subscribers can download it. It is stored privately, not in the public uploads folder.</p>
-    {% if post.meta.file %}<p><b>A file is attached.</b> Uploading a new one replaces it.</p>{% endif %}
-    <div class="upload-row"><input type="file" name="file" accept="application/pdf"><button class="btn small" type="submit">Upload PDF</button>
-    {% if post.meta.file %}<button class="btn small outline" type="submit" name="remove" value="1" formnovalidate>Remove file</button>{% endif %}</div>
+  <fieldset><legend>{{ title }}</legend>
+    <p class="muted" style="margin-top:0">{{ text }} Only subscribers can download it. It is stored privately, not in the public uploads folder.</p>
+    {% if post.meta[key] %}<p><b>A file is attached{% if which == 'data' %} ({{ post.meta[key].rsplit('.', 1)[-1]|upper }}){% endif %}.</b> Uploading a new one replaces it.</p>{% endif %}
+    <div class="upload-row"><input type="file" name="file" accept="{{ accept }}"><button class="btn small" type="submit">{{ btn }}</button>
+    {% if post.meta[key] %}<button class="btn small outline" type="submit" name="remove" value="1" formnovalidate>Remove file</button>{% endif %}</div>
   </fieldset>
 </form>
+{% endfor %}
 {% endif %}
 <script type="application/json" id="snippets">{{ snippets|tojson }}</script>
 {% endblock %}

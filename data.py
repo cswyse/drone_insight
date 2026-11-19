@@ -421,12 +421,27 @@ def breakdown(dim, f):
     return rows, total
 
 
+HEAT_MAX = 6      # most sub-sectors (rows) and verticals (columns) the grid shows
+
+
 def heatmap(f):
+    """Sub-sector by vertical grid for the current selection. With many of either, only the largest are shown
+    (plus the one currently selected, if any)."""
     g = {"country": f.get("country")}
+
+    def top(items, dim):
+        ranked = sorted(items, key=lambda x: market_series({**g, dim: x["id"]})[IDX2026], reverse=True)
+        keep = ranked[:HEAT_MAX]
+        sel = f.get(dim)
+        if sel and all(x["id"] != sel for x in keep):
+            keep = keep[:HEAT_MAX - 1] + [x for x in ranked if x["id"] == sel]
+        return keep
+
+    subs, verts = top(cfg.SUBSECTORS, "subsector"), top(cfg.VERTICALS, "vertical")
     grid, mx = [], 0
-    for s in cfg.SUBSECTORS:
+    for s in subs:
         row = []
-        for v in cfg.VERTICALS:
+        for v in verts:
             val = market_series({**g, "subsector": s["id"], "vertical": v["id"]})[IDX2026]
             mx = max(mx, val)
             row.append({"sub": s["id"], "vert": v["id"], "value": val})
@@ -436,7 +451,8 @@ def heatmap(f):
             c["intensity"] = c["value"] / mx if mx else 0
             c["active"] = (f.get("subsector") in (None, c["sub"]) and f.get("vertical") in (None, c["vert"])
                            and (f.get("subsector") or f.get("vertical")) is not None)
-    return grid
+    return {"rows": grid, "cols": verts, "total_sub": len(cfg.SUBSECTORS), "total_vert": len(cfg.VERTICALS),
+            "trimmed": len(subs) < len(cfg.SUBSECTORS) or len(verts) < len(cfg.VERTICALS)}
 
 
 def filter_news(f=None, company=None, ntype=None, q=None):

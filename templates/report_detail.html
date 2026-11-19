@@ -30,7 +30,9 @@
       {% if is_subscriber %}
       <div class="side-box">
         <h3 style="font-size:1.2rem">Included in your subscription</h3>
-        {% if r.meta.file %}<p class="muted">Download the full report as a PDF.</p><a class="btn" href="{{ url_for('report_download', slug=r.slug) }}">Download PDF</a>
+        {% if r.meta.file or r.meta.data_file %}<p class="muted">Download {{ 'the full report and its data' if r.meta.file and r.meta.data_file else ('the full report as a PDF' if r.meta.file else 'the data behind this report') }}.</p>
+        {% if r.meta.file %}<a class="btn" href="{{ url_for('report_download', slug=r.slug) }}">Download PDF</a>{% endif %}
+        {% if r.meta.data_file %}<a class="btn {{ 'outline' if r.meta.file }}" style="{{ 'margin-top:10px' if r.meta.file }}" href="{{ url_for('report_download', slug=r.slug, which='data') }}">Download data ({{ r.meta.data_file.rsplit('.', 1)[-1]|upper }})</a>{% endif %}
         {% else %}<p class="muted">The full report file has not been added yet. <a href="{{ url_for('contact', subject='Report file: ' ~ r.title) }}">Ask us for a copy</a>.</p>{% endif %}
       </div>
       {% else %}
