@@ -174,6 +174,23 @@ def register(app, admin_required, paginate):
         if cid not in d.COUNTRY:
             cid = next(iter(d.COUNTRY))
         errors, form = {}, {}
+        real = request.values.get("basis") == "real"
+        if request.method == "POST" and request.form.get("action") == "fill_real":
+            try:
+                infl = dataio.parse_num(request.form.get("infl"))
+            except ValueError:
+                infl = None
+            if infl is None or not -20 <= infl <= 100:
+                flash("Enter a price growth percentage, for example 2.5.", "error")
+                return redirect(url_for("admin_market", country=cid, basis="real"))
+            base = timeline.price_base()
+            fill = {}
+            for (c0, s0, v0), vals in d.STORE.market.items():
+                if c0 == cid and (c0, s0, v0) not in d.STORE.market_real:
+                    fill[(c0, s0, v0)] = [x / (1 + infl / 100.0) ** (y - base) for x, y in zip(vals, YEARS)]
+            dataio.save_market({}, None, fill)
+            flash(f"Filled real sizes for {len(fill)} row{'' if len(fill) == 1 else 's'} of {d.COUNTRY[cid]['name']} at {infl:g}% price growth a year. Rows that already had real sizes were left alone.", "ok")
+            return redirect(url_for("admin_market", country=cid, basis="real"))
         if request.method == "POST":
             form = request.form.to_dict()
             cells, confs, n_set, n_clear = {}, {}, 0, 0
@@ -200,7 +217,15 @@ def register(app, admin_required, paginate):
                         errors[f"g|{s}|{v}"] = "Enter a percentage."
                         continue
                     series = dataio.fill_series(raw, None if g is None else g / 100.0, len(YEARS))
-                    if series is None:
+                    if real:
+                        if series is not None and (cid, s, v) not in d.STORE.market:
+                            errors[f"m|{s}|{v}|{YEARS[0]}"] = "Enter the nominal size for this row first."
+                            continue
+                        if series is None and (cid, s, v) in d.STORE.market_real:
+                            n_clear += 1
+                        cells[(cid, s, v)] = series
+                        n_set += series is not None
+                    elif series is None:
                         if (cid, s, v) in d.STORE.market:
                             n_clear += 1
                         cells[(cid, s, v)] = None
@@ -209,16 +234,24 @@ def register(app, admin_required, paginate):
                         confs[(cid, s, v)] = form.get(f"c|{s}|{v}") if form.get(f"c|{s}|{v}") in dataio.LEVEL else None
                         n_set += 1
             if errors:
-                flash("Some values are not numbers. They are marked below, and nothing was saved.", "error")
+                flash("Some values are not numbers or are not allowed. They are marked below, and nothing was saved.", "error")
             else:
-                dataio.save_market(cells, confs)
-                flash(f"Saved {d.COUNTRY[cid]['name']}: {n_set} row{'' if n_set == 1 else 's'} with data" + (f", {n_clear} cleared." if n_clear else "."), "ok")
-                return redirect(url_for("admin_market", country=cid))
+                if real:
+                    dataio.save_market({}, None, cells)
+                else:
+                    dataio.save_market(cells, confs)
+                flash(f"Saved {d.COUNTRY[cid]['name']}: {n_set} row{'' if n_set == 1 else 's'} with " + ("real sizes" if real else "data") + (f", {n_clear} cleared." if n_clear else "."), "ok")
+                return redirect(url_for("admin_market", country=cid, basis="real" if real else None))
         grid = []
         for s in d.SUB.values():
             for v in d.VERT.values():
-                vals = d.STORE.market.get((cid, s["id"], v["id"]))
-                row = {"s": s, "v": v, "cells": []}
+                key3 = (cid, s["id"], v["id"])
+                vals = (d.STORE.market_real if real else d.STORE.market).get(key3)
+                nom = d.STORE.market.get(key3)
+                row = {"s": s, "v": v, "cells": [], "has_nominal": nom is not None}
+                if real and vals is not None and nom is not None:        # price index now, with the base year = 100
+                    b = YEARS.index(timeline.price_base()) if timeline.price_base() in YEARS else 0
+                    row["index"] = (nom[d.IDX2026] / vals[d.IDX2026]) / (nom[b] / vals[b]) * 100 if vals[d.IDX2026] and vals[b] and nom[b] else None
                 for i, y in enumerate(YEARS):
                     key = f"m|{s['id']}|{v['id']}|{y}"
                     row["cells"].append({"key": key, "value": form[key] if key in form else ("" if vals is None else f"{vals[i]:.4g}" if vals[i] < 1 else f"{vals[i]:.1f}"), "err": errors.get(key)})
@@ -227,20 +260,25 @@ def register(app, admin_required, paginate):
                 row["ckey"] = f"c|{s['id']}|{v['id']}"
                 row["conf"] = form.get(row["ckey"], d.STORE.market_conf.get((cid, s["id"], v["id"])) or "")
                 grid.append(row)
-        return render_template("admin/data_market.html", config_default=cfg.CONFIDENCE_DEFAULT_MARKET, cid=cid, grid=grid, years=YEARS, section="data", errors=errors)
+        return render_template("admin/data_market.html", config_default=cfg.CONFIDENCE_DEFAULT_MARKET, cid=cid, grid=grid, years=YEARS, section="data", errors=errors,
+                               real=real, price_base=timeline.price_base(), n_real=len(d.STORE.market_real))
 
     @app.route("/admin/data/market.csv")
     @admin_required
     def admin_market_csv():
         out = io.StringIO()
         w = csv.writer(out)
-        w.writerow(["country", "sub-sector", "vertical", "confidence"] + YEARS)
+        w.writerow(["country", "sub-sector", "vertical", "basis", "confidence"] + YEARS)
         for c in d.COUNTRY.values():
             for s in d.SUB.values():
                 for v in d.VERT.values():
                     vals = d.STORE.market.get((c["id"], s["id"], v["id"]))
                     lvl = d.STORE.market_conf.get((c["id"], s["id"], v["id"]))
-                    w.writerow([_safe(c["name"]), _safe(s["name"]), _safe(v["name"]), dataio.LEVEL[lvl]["name"] if lvl else ""] + ([""] * len(YEARS) if vals is None else [round(x, 3) for x in vals]))
+                    names = [_safe(c["name"]), _safe(s["name"]), _safe(v["name"])]
+                    w.writerow(names + ["nominal", dataio.LEVEL[lvl]["name"] if lvl else ""] + ([""] * len(YEARS) if vals is None else [round(x, 3) for x in vals]))
+                    rv = d.STORE.market_real.get((c["id"], s["id"], v["id"]))
+                    if rv is not None:
+                        w.writerow(names + ["real", ""] + [round(x, 3) for x in rv])
         return Response(out.getvalue(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=market-sizes.csv"})
 
     @app.route("/admin/data/market/import", methods=["POST"])
@@ -255,13 +293,14 @@ def register(app, admin_required, paginate):
         except ValueError as e:
             flash(str(e), "error")
             return redirect(url_for("admin_market"))
-        errors, cells, confs = [], {}, {}
+        errors, cells, confs, real_cells = [], {}, {}, {}
         if not rows:
             errors.append("The file is empty.")
         else:
             head = [h.strip().lower().replace("-", "").replace(" ", "") for h in rows[0]]
             ci = si = vi = None
             ki = head.index("confidence") if "confidence" in head else None
+            bi = head.index("basis") if "basis" in head else None
             yi = {}
             try:
                 ci, si, vi = head.index("country"), head.index("subsector"), head.index("vertical")
@@ -289,12 +328,23 @@ def register(app, admin_required, paginate):
                 if any(x is not None and x < 0 for x in raw):
                     errors.append(f"Row {n}: values cannot be negative.")
                     continue
+                basis = (r[bi].strip().lower() if bi is not None and bi < len(r) else "") or "nominal"
+                if basis not in ("nominal", "real"):
+                    errors.append(f"Row {n}: basis must be nominal or real, not “{r[bi].strip()}”.")
+                    continue
+                if basis == "real":
+                    real_cells[(c, s, v)] = dataio.fill_series(raw, None, len(YEARS))
+                    continue
                 cells[(c, s, v)] = dataio.fill_series(raw, None, len(YEARS))
                 if ki is not None and ki < len(r) and r[ki].strip():
                     try:
                         confs[(c, s, v)] = dataio.parse_level(r[ki])
                     except ValueError:
                         errors.append(f"Row {n}: unknown confidence “{r[ki].strip()}”. Use one of: " + ", ".join(lv["name"] for lv in dataio.LEVELS) + ".")
+        for key in real_cells:
+            if key not in cells and key not in d.STORE.market and len(errors) < 10:
+                errors.append("A real row has no nominal size for the same country, sub-sector and vertical. Add the nominal row too.")
+                break
         if errors:
             flash("Nothing was imported. " + " ".join(errors[:10]), "error")
             return redirect(url_for("admin_market"))
@@ -302,7 +352,7 @@ def register(app, admin_required, paginate):
             backup.auto_backup(UPLOADS, "replace-import")
             for key in list(d.STORE.market):
                 cells.setdefault(key, None)
-        dataio.save_market(cells, confs)
+        dataio.save_market(cells, confs, real_cells)
         n = len([1 for v in cells.values() if v is not None])
         flash(f"Imported {n} market rows.", "ok")
         return redirect(url_for("admin_market"))
@@ -431,29 +481,63 @@ def register(app, admin_required, paginate):
                         errors[p + "revenue"] = f"Enter revenue for {timeline.qlabel(y, q)}, or clear the row."
                     lvl = form.get(p + "conf")
                     q_rows.append({"year": y, "quarter": q, **vals, "conf": lvl if lvl in dataio.LEVEL else None})
+            prods, seen = [], set()
+            try:
+                n_prod = min(int(form.get("prod_n") or 0), 30)
+            except ValueError:
+                n_prod = 0
+            for i in range(n_prod):
+                pname = (form.get(f"prod_{i}_name") or "").strip()[:80]
+                unit = (form.get(f"prod_{i}_unit") or "").strip()[:30]
+                vols = {}
+                for y in dataio.FIN_YEARS:
+                    key = f"prod_{i}_{y}"
+                    v = _num((form.get(key) or "").strip(), f"{pname or 'product'} volume {y}", errors, key, minimum=0.0)
+                    if v is not None:
+                        vols[y] = v
+                if not (pname or unit or vols):
+                    continue
+                if not pname:
+                    errors[f"prod_{i}_name"] = "Give the product a name, or clear the row."
+                elif pname.lower() in seen:
+                    errors[f"prod_{i}_name"] = f"“{pname}” is listed twice."
+                seen.add(pname.lower())
+                prods.append({"name": pname, "unit": unit, "vols": vols})
+            own = (form.get("ownership") or "").strip()
+            if own not in dataio.OWNERSHIP and own != (existing or {}).get("ownership"):
+                own = dataio.OWNERSHIP[1]       # only the listed choices (or what the company already had) are accepted
             if not errors:
                 is_new = existing is None
                 taken = set(d.STORE.companies)
                 slug = slug or dataio.unique_id(name, taken)
-                data = {"hq": hq, "city": (form.get("city") or "").strip()[:80], "ownership": (form.get("ownership") or "Private").strip()[:60],
+                data = {"hq": hq, "city": (form.get("city") or "").strip()[:80], "ownership": own,
                         "website": website, "ticker": (form.get("ticker") or "").strip()[:12], "exchange": (form.get("exchange") or "").strip()[:20],
                         "founded": founded, "market_cap": mcap, "description": (form.get("description") or "").strip()[:5000], "alloc": alloc}
                 dataio.save_company(slug, name[:120], data)
                 dataio.save_fin(slug, fin_rows, clear=dataio.FIN_YEARS)
                 dataio.save_fin_q(slug, q_rows, clear=q_slots)
+                dataio.save_products(slug, prods, window=set(dataio.FIN_YEARS))
                 dataio.save_values("company", slug, _read_section_values("company"))
                 flash(("Added " if is_new else "Saved ") + name + ".", "ok")
                 return redirect(url_for("admin_company", slug=slug))
             flash("Some fields need attention. They are marked below, and nothing was saved.", "error")
         if not form:
             form = _company_form(existing or {}, d.STORE.fin_raw.get(slug, []) if existing else [], _qraw(slug) if existing else [])
+            old = dataio.load_products().get(slug, []) if existing else []
+            form["prod_n"] = str(len(old) + 1)
+            for i, p in enumerate(old):
+                form[f"prod_{i}_name"], form[f"prod_{i}_unit"] = p["name"], p["unit"]
+                for y in dataio.FIN_YEARS:
+                    if y in p["vols"]:
+                        form[f"prod_{i}_{y}"] = f"{p['vols'][y]:g}"
         inputs = _section_inputs("company", slug) if slug else [{**s, "value": ""} for s in d.SECTIONS["defs"] if s["entity"] == "company"]
         if request.method == "POST":
             for i in inputs:
                 i["value"] = form.get("sec_" + i["id"], "")
         sums = {dim: round(sum(float(form.get(f"alloc_{dim}_{k}") or 0) if re.match(r"^[0-9.]+$", form.get(f"alloc_{dim}_{k}") or "") else 0 for k in d.DIM_LOOKUP[dim]), 1) for dim in dataio.DIM_KINDS}
         return render_template("admin/data_company.html", co=existing, form=form, errors=errors, inputs=inputs, fin_years=dataio.FIN_YEARS,
-                               ownership=dataio.OWNERSHIP, sums=sums, last_actual=cfg.LAST_ACTUAL, section="data",
+                               ownership=dataio.OWNERSHIP, sums=sums, units=dataio.known_units(), prod_err=any(k.startswith("prod_") for k in errors),
+                               n_prod=max(int(form.get("prod_n") or 1), 1) if str(form.get("prod_n") or "1").isdigit() else 1, last_actual=cfg.LAST_ACTUAL, section="data",
                                q_slots=[{"y": y, "q": q, "label": timeline.qlabel(y, q), "status": timeline.quarter_status(y, q)} for y, q in _q_slots(slug)],
                                q_years={r["year"] for r in _qraw(slug)} if existing else set(),
                                has_q=bool(existing and _qraw(slug)), q_has_err=any(k.startswith("fq_") for k in errors))
@@ -466,6 +550,79 @@ def register(app, admin_required, paginate):
             abort(404)
         dataio.delete_company(slug)
         flash(f"Deleted {co['name']}.", "ok")
+        return redirect(url_for("admin_companies"))
+
+    @app.route("/admin/data/volumes.csv")
+    @admin_required
+    def admin_volumes_csv():
+        out = io.StringIO()
+        w = csv.writer(out)
+        w.writerow(["company", "product", "unit"] + list(dataio.FIN_YEARS))
+        for slug, items in dataio.load_products().items():
+            co = d.STORE.companies.get(slug)
+            for p in items:
+                if co:
+                    w.writerow([_safe(co["name"]), _safe(p["name"]), _safe(p["unit"])] + [p["vols"].get(y, "") for y in dataio.FIN_YEARS])
+        return Response(out.getvalue(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=company-volumes.csv"})
+
+    @app.route("/admin/data/volumes/import", methods=["POST"])
+    @admin_required
+    def admin_volumes_import():
+        f = request.files.get("file")
+        if not f or not f.filename:
+            flash("Choose a CSV file first.", "error")
+            return redirect(url_for("admin_companies"))
+        try:
+            rows = list(csv.reader(io.StringIO(_csv_text(f))))
+        except ValueError as e:
+            flash(str(e), "error")
+            return redirect(url_for("admin_companies"))
+        head = [h.strip().lower() for h in rows[0]] if rows else []
+        errors, upd = [], {}
+        if any(h not in head for h in ("company", "product", "unit")):
+            errors.append("The first row must have the columns company, product and unit, then years such as " + f"{dataio.FIN_YEARS[0]} to {dataio.FIN_YEARS[-1]}.")
+        else:
+            col = {h: i for i, h in enumerate(head)}
+            ycols = {y: col[str(y)] for y in dataio.FIN_YEARS if str(y) in col}
+            by_name = {c["name"].casefold(): s for s, c in d.STORE.companies.items()}
+            for n, r in enumerate(rows[1:], start=2):
+                if not any(x.strip() for x in r) or len(errors) >= 10:
+                    continue
+                get = lambda k: r[col[k]].strip() if col[k] < len(r) else ""
+                key = get("company").casefold()
+                slug = key if key in d.STORE.companies else by_name.get(key)
+                if not slug:
+                    errors.append(f"Row {n}: company “{get('company')}” does not exist. Add it under Companies first.")
+                    continue
+                if not get("product"):
+                    errors.append(f"Row {n}: the product name is empty.")
+                    continue
+                try:
+                    vols = {y: dataio.parse_num(r[i]) for y, i in ycols.items() if i < len(r)}
+                except ValueError:
+                    errors.append(f"Row {n}: a volume is not a number.")
+                    continue
+                if any(v is not None and v < 0 for v in vols.values()):
+                    errors.append(f"Row {n}: volumes cannot be negative.")
+                    continue
+                upd.setdefault(slug, []).append({"name": get("product")[:80], "unit": get("unit")[:30], "vols": {y: v for y, v in vols.items() if v is not None}})
+        if errors:
+            flash("Nothing was imported. " + " ".join(errors[:10]), "error")
+            return redirect(url_for("admin_companies"))
+        existing = dataio.load_products()
+        n = 0
+        for slug, items in upd.items():
+            cur = {p["name"].lower(): p for p in existing.get(slug, [])}
+            for it in items:
+                p = cur.get(it["name"].lower())
+                if p:
+                    p["unit"] = it["unit"] or p["unit"]
+                    p["vols"].update(it["vols"])
+                else:
+                    cur[it["name"].lower()] = {"name": it["name"], "unit": it["unit"], "vols": it["vols"]}
+                n += 1
+            dataio.save_products(slug, list(cur.values()))
+        flash(f"Imported {n} product row{'' if n == 1 else 's'} for {len(upd)} compan{'y' if len(upd) == 1 else 'ies'}.", "ok")
         return redirect(url_for("admin_companies"))
 
     @app.route("/admin/data/financials.csv")
@@ -661,10 +818,14 @@ def register(app, admin_required, paginate):
                 y, q = (y + 1, 1) if q == 4 else (y, q + 1)
                 new["last_actual_q"] = [y, q]
                 done = f"Company quarters now count as reported up to {timeline.qlabel(y, q)}."
+            elif action == "price_base":
+                new["price_base"] = request.form.get("price_base") or None
+                done = "Price year saved."
             elif action == "save":
                 try:
                     new = {**t, **{k: int(request.form[k]) for k in ("first_year", "last_year", "current_year", "current_quarter", "last_actual_year")},
-                           "last_actual_q": [int(request.form["laq_year"]), int(request.form["laq_quarter"])]}
+                           "last_actual_q": [int(request.form["laq_year"]), int(request.form["laq_quarter"])],
+                           "price_base": request.form.get("price_base") or None}
                 except (KeyError, ValueError):
                     flash("Enter whole numbers for the years and quarters.", "error")
                     return redirect(url_for("admin_timeline"))

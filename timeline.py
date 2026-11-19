@@ -5,6 +5,8 @@ The dashboard's timeline: which period it is "as of", how far reported data runs
     current_year / quarter   the period the dashboard is "as of"; the current year is the headline year
     last_actual_year         the latest year of annual (market) data that is fully reported
     last_actual_q            the latest quarter of company data that is reported, as [year, quarter]
+    price_base               the year whose prices real (constant-price) market sizes are in; blank means the
+                             latest reported year, which is the usual choice
 
 Years up to last_actual_year are actual (A). Years after it, up to the current year, are estimates (E), so
 the dashboard can be moved forward while the newest data is still to come. Later years are forecasts (F).
@@ -27,7 +29,7 @@ HORIZON_GAP = DEFAULTS["last_year"] - DEFAULTS["current_year"]   # years of fore
 
 # Lists the rest of the code holds references to: updated in place by apply()
 FIN_YEARS = []
-CURRENT = {"q": DEFAULTS["current_quarter"], "last_actual_q": tuple(DEFAULTS["last_actual_q"])}
+CURRENT = {"q": DEFAULTS["current_quarter"], "last_actual_q": tuple(DEFAULTS["last_actual_q"]), "price_base": None}
 
 
 def qkey(year, quarter):
@@ -47,6 +49,8 @@ def clean(raw):
             t[k] = int(base[k])
         la = base["last_actual_q"]
         t["last_actual_q"] = [int(la[0]), int(la[1])]
+        pb = base.get("price_base")
+        t["price_base"] = None if pb in (None, "") else int(pb)
     except (TypeError, ValueError, IndexError, KeyError):
         return dict(DEFAULTS), ["Some of the timeline values are not numbers."]
     if not 1 <= t["current_quarter"] <= 4 or not 1 <= t["last_actual_q"][1] <= 4:
@@ -59,6 +63,8 @@ def clean(raw):
         errors.append("The timeline can cover at most 40 years.")
     if not t["first_year"] - 1 <= t["last_actual_year"] <= t["current_year"]:
         errors.append(f"The latest reported year must be between {t['first_year'] - 1} and the current year ({t['current_year']}).")
+    if t["price_base"] is not None and not t["first_year"] <= t["price_base"] <= t["last_year"]:
+        errors.append(f"The price year must be between {t['first_year']} and {t['last_year']}, or left on the latest reported year.")
     if not errors and qkey(*t["last_actual_q"]) > qkey(t["current_year"], t["current_quarter"]):
         errors.append("The latest reported quarter cannot be after the current quarter.")
     return (t if not errors else dict(DEFAULTS)), errors
@@ -91,6 +97,7 @@ def apply(t=None):
     cfg.FORECAST_FROM = t["current_year"] + 1
     CURRENT["q"] = t["current_quarter"]
     CURRENT["last_actual_q"] = tuple(t["last_actual_q"])
+    CURRENT["price_base"] = t.get("price_base")
     FIN_YEARS[:] = [y for y in cfg.YEARS if y <= t["current_year"]]
     return t
 
@@ -104,6 +111,12 @@ def advance(t, quarters):
     t["last_year"] += new_year - t["current_year"]
     t["current_year"] = new_year
     return t
+
+
+def price_base():
+    """The year real market sizes are priced in: set under Timeline, otherwise the latest reported year."""
+    y = CURRENT["price_base"] or cfg.LAST_ACTUAL
+    return y if cfg.YEARS[0] <= y <= cfg.YEARS[-1] else cfg.LAST_ACTUAL
 
 
 def year_status(y):

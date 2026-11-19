@@ -20,12 +20,21 @@
 </table></div>
 {{ pager(page, pages, 'admin_companies', params) }}
 
-<details style="margin:26px 0 80px;max-width:760px">
+<details style="margin:26px 0 20px;max-width:760px">
   <summary><b>Import or export financials as CSV</b></summary>
   <div class="adm-form" style="padding:14px 0 0">
     <p class="muted" style="margin:0">Columns: <code>company</code>, <code>year</code>, <code>revenue</code>, and optionally <code>gross_margin_pct</code>, <code>ebitda</code>, <code>net_income</code>, <code>capex</code>, <code>employees</code>. Money is in US$ millions. Companies must already exist. Rows update the same company and year. If anything is wrong, nothing is imported.</p>
     <p style="margin:0"><a class="btn small outline" href="{{ url_for('admin_fin_csv') }}">Download current financials</a></p>
     <form method="post" action="{{ url_for('admin_fin_import') }}" enctype="multipart/form-data" class="upload-row">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="file" name="file" accept=".csv,text/csv" required><button class="btn small" type="submit">Import CSV</button></form>
+  </div>
+</details>
+<details style="margin:0 0 80px;max-width:760px">
+  <summary><b>Import or export product volumes as CSV</b></summary>
+  <div class="adm-form" style="padding:14px 0 0">
+    <p class="muted" style="margin:0">Columns: <code>company</code>, <code>product</code>, <code>unit</code>, then one column per year. One row per product. Rows in the file update that product and keep its other years.</p>
+    <p style="margin:0"><a class="btn small outline" href="{{ url_for('admin_volumes_csv') }}">Download current volumes</a></p>
+    <form method="post" action="{{ url_for('admin_volumes_import') }}" enctype="multipart/form-data" class="upload-row">
       <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="file" name="file" accept=".csv,text/csv" required><button class="btn small" type="submit">Import CSV</button></form>
   </div>
 </details>

@@ -149,17 +149,15 @@
     window.addEventListener('popstate', function (e) { if (e.state && e.state.dash) swap(location.href, false); });
   }
 
-  // Annual / Quarterly switch on the company page
-  document.querySelectorAll('[data-tabset]').forEach(function (set) {
-    set.addEventListener('click', function (e) {
-      var a = e.target.closest('a'); if (!a) return;
-      e.preventDefault();
-      var scope = set.parentNode;
-      set.querySelectorAll('a').forEach(function (x) { x.classList.toggle('on', x === a); });
-      scope.querySelectorAll('[data-pane]').forEach(function (p) { p.hidden = ('#' + p.id) !== a.getAttribute('href'); });
-      var shown = scope.querySelector(a.getAttribute('href')), box = shown && shown.closest('.table-scroll');
-      if (box) box.scrollLeft = box.scrollWidth;   // show the latest periods first
-    });
+  // Tab switches (annual / quarterly, nominal / real / price index). Delegated, so they keep working after the dashboard swaps its content.
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest('[data-tabset] a'); if (!a) return;
+    e.preventDefault();
+    var set = a.closest('[data-tabset]'), scope = set.parentNode;
+    set.querySelectorAll('a').forEach(function (x) { x.classList.toggle('on', x === a); });
+    scope.querySelectorAll('[data-pane]').forEach(function (p) { p.hidden = ('#' + p.id) !== a.getAttribute('href'); });
+    var shown = scope.querySelector(a.getAttribute('href')), box = shown && shown.closest('.table-scroll');
+    if (box) box.scrollLeft = box.scrollWidth;   // show the latest periods first
   });
 
   // Clickable table rows (and in-dashboard links)

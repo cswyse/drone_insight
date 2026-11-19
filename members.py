@@ -108,7 +108,7 @@ def register(app, admin_required, paginate, is_admin):
             return fn(*a, **kw)
         return wrapper
 
-    for ep, api in (("dashboard", False), ("dashboard_export", False), ("company", False), ("api_market", True), ("api_company", True)):
+    for ep, api in (("dashboard", False), ("dashboard_export", False), ("company_export", False), ("company", False), ("api_market", True), ("api_company", True)):
         app.view_functions[ep] = subscribers_only(app.view_functions[ep], api)
 
     # ------------------------------------------------------------------

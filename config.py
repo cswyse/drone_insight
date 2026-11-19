@@ -73,4 +73,5 @@ CONFIDENCE = [
 ]
 CONFIDENCE_DEFAULT_MARKET = "medium"   # used for market sizes with no level set
 
+CHART_YEARS_BACK, CHART_YEARS_AHEAD = 5, 5   # the top charts show this many years before and after the current year, however far the timeline moves
 CAGR_YEARS = 5   # the growth columns: CAGR over the last 5 years up to the current year, and over the 5 years after it

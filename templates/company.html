@@ -69,9 +69,26 @@
   </div>
   {% endif %}
 
+  {% if products and 'company.volumes' not in hidden %}
+  {% set vyears = (products|map(attribute='rows')|sum(start=[])|map(attribute='year')|unique|sort|list)[-7:] %}
+  <div class="card" style="margin-top:24px">
+    <div class="panel-title"><h3>Volumes</h3><span class="small muted">{{ products|length }} product{{ '' if products|length == 1 }}{{ 's' if products|length != 1 }}</span></div>
+    <div class="panel-body table-scroll">
+      <table class="data fin">
+        <thead><tr><th>Product</th>{% for y in vyears %}<th class="{{ 'est' if year_now >= y and ysuf(y) == 'E' }}">{{ y }}{{ ysuf(y) if ysuf(y) == 'E' }}</th>{% endfor %}<th>Latest YoY</th><th>CAGR</th></tr></thead>
+        <tbody>{% for p in products %}{% set byy = {} %}{% for r in p.rows %}{% if byy.update({r.year: r}) %}{% endif %}{% endfor %}
+          <tr><td><b>{{ p.name }}</b>{% if p.unit %}<div class="small muted">{{ p.unit }}</div>{% endif %}</td>
+          {% for y in vyears %}<td>{% if y in byy %}{{ '{:,.0f}'.format(byy[y].volume) if byy[y].volume >= 100 else '{:,.1f}'.format(byy[y].volume) }}{% endif %}</td>{% endfor %}
+          <td>{{ fmt_pct(p.latest.yoy, 1, true) if p.latest.yoy is not none else '' }}</td><td>{{ fmt_pct(p.cagr) if p.cagr is not none else '' }}{% if p.cagr is not none %}<div class="small muted">from {{ p.cagr_from }}</div>{% endif %}</td></tr>
+        {% endfor %}</tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
   {% if 'company.financials' not in hidden %}
   <div class="card" style="margin-top:24px">
-    <div class="panel-title"><h3>Financial summary, US$ m</h3>{% if fin and latest.status == 'E' %}<span class="small muted">{{ latest.year }} is an estimate</span>{% endif %}</div>
+    <div class="panel-title"><h3>Financial summary, US$ m</h3><span>{% if fin and latest.status == 'E' %}<span class="small muted" style="margin-right:12px">{{ latest.year }} is an estimate</span>{% endif %}{% if fin %}<a href="{{ url_for('company_export', slug=co.slug) }}" class="small" title="Download the financial summary (annual and quarterly) as a CSV file that opens in Excel">Export data</a>{% endif %}</span></div>
     <div class="panel-body table-scroll">
       {% if not fin %}<div class="empty">No financials have been added for this company yet.</div>{% else %}
       {% if fin_q %}<div class="seg" role="tablist" data-tabset aria-label="Annual or quarterly"><a href="#fin-annual" role="tab" class="on">Annual</a><a href="#fin-quarterly" role="tab">Quarterly</a></div>{% endif %}

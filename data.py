@@ -53,6 +53,7 @@ def slugify(s):
 class Store:
     def __init__(self):
         self.market, self.companies, self.company_cells, self.fin, self.market_conf = {}, {}, {}, {}, {}
+        self.market_real, self.products = {}, {}
         self.fin_q, self.fin_raw = {}, {}
 
 
@@ -189,7 +190,12 @@ def reload():
     market = {k: v for k, v in dataio.load_market().items()
               if k[0] in COUNTRY and k[1] in SUB and k[2] in VERT and len(v) == NY}
     mconf = {k: v for k, v in dataio.load_market_conf().items() if k in market}
+    mreal = {k: v for k, v in dataio.load_market_real().items() if k in market and len(v) == NY}
     profiles, fins, fins_q = dataio.load_companies(), dataio.load_fin(), dataio.load_fin_q()
+    products = {}
+    for slug, items in dataio.load_products().items():
+        if slug in profiles:
+            products[slug] = [p for p in (_product_view(it) for it in items) if p]
 
     companies, fin, cells_all, fin_q, fin_raw = {}, {}, {}, {}, {}
     for slug, p in profiles.items():
@@ -252,7 +258,7 @@ def reload():
         }
         fin[slug] = rows
 
-    for store_dict, new in ((STORE.market, market), (STORE.market_conf, mconf), (STORE.companies, companies), (STORE.company_cells, cells_all), (STORE.fin, fin), (STORE.fin_q, fin_q), (STORE.fin_raw, fin_raw)):
+    for store_dict, new in ((STORE.market, market), (STORE.market_conf, mconf), (STORE.market_real, mreal), (STORE.products, products), (STORE.companies, companies), (STORE.company_cells, cells_all), (STORE.fin, fin), (STORE.fin_q, fin_q), (STORE.fin_raw, fin_raw)):
         store_dict.clear()
         store_dict.update(new)
     defs, vals = dataio.load_sections()
@@ -313,13 +319,67 @@ def _match(key, f):
             (not f.get("vertical") or f["vertical"] == v))
 
 
-def market_series(f):
+def _product_view(it):
+    """A product's volumes for the years on the timeline (up to the current year), with growth. None if it has no volumes."""
+    rows, prev = [], None
+    for y in YEARS:
+        v = it["vols"].get(y)
+        if v is None or y > cfg.ESTIMATE_YEAR:
+            continue
+        rows.append({"year": y, "volume": v, "status": year_status(y), "yoy": (v / prev["volume"] - 1) if prev and prev["year"] == y - 1 and prev["volume"] else None})
+        prev = rows[-1]
+    if not rows:
+        return None
+    first, last = rows[0], rows[-1]
+    n = last["year"] - first["year"]
+    return {"name": it["name"], "unit": it["unit"], "rows": rows, "latest": last,
+            "cagr": cagr(first["volume"], last["volume"], n) if n >= 2 else None, "cagr_from": first["year"]}
+
+
+def has_real():
+    return bool(STORE.market_real)
+
+
+def market_series(f, basis="nominal"):
+    """Market size per year for a slice. basis="real": cells without a real series count at their nominal size."""
+    real = basis == "real"
     tot = [0.0] * NY
     for k, vals in STORE.market.items():
         if _match(k, f):
+            if real:
+                vals = STORE.market_real.get(k, vals)
             for i, x in enumerate(vals):
                 tot[i] += x
     return tot
+
+
+def price_info(f):
+    """Price index (100 in the base year) from nominal / real, over the cells of the slice that have both.
+    Returns None without real data. coverage = share of the slice's current nominal size that has real data."""
+    n, r, den, cov = [0.0] * NY, [0.0] * NY, 0.0, 0.0
+    for k, vals in STORE.market.items():
+        if _match(k, f):
+            den += vals[IDX2026]
+            if k in STORE.market_real:
+                cov += vals[IDX2026]
+                for i in range(NY):
+                    n[i] += vals[i]
+                    r[i] += STORE.market_real[k][i]
+    if not cov or den <= 0:
+        return None
+    base = timeline.price_base()
+    b = YEARS.index(base) if base in YEARS else 0
+    if not r[b] or not n[b]:
+        return None
+    ratio0 = n[b] / r[b]
+    idx = [(n[i] / r[i]) / ratio0 * 100 if r[i] else None for i in range(NY)]
+    if idx[IDX2026] is None:
+        return None
+    h0, h1, f1 = cagr_windows()
+    return {"index": idx, "now": idx[IDX2026], "base": base, "coverage": cov / den,
+            "yoy": (idx[IDX2026] / idx[IDX2025] - 1) if idx[IDX2025] else None,
+            "cagr_hist": cagr(idx[h0], idx[h1], h1 - h0) if idx[h0] else None,
+            "cagr_fc": cagr(idx[h1], idx[f1], f1 - h1) if idx[f1] and idx[h1] else None}
 
 
 def market_conf(key):
@@ -390,6 +450,7 @@ def summarize(vals):
 
 def breakdown(dim, f):
     """Rows for a breakdown dimension within filter f. Companies return revenue rows."""
+    company = dim not in ("country", "subsector", "vertical")
     total = market_series(f)
     total_size = total[IDX2026] or 1
     rows = []

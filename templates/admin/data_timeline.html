@@ -37,6 +37,14 @@
 </div>
 <p class="small muted" style="max-width:48em">Marking a year or quarter as reported changes its label from estimate to actual, and new financials you enter for it default to “Reported”. It does not change any numbers.</p>
 
+<form method="post" class="adm-form" style="max-width:760px;padding:6px 0 0;margin-top:22px">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="price_base">
+  <h3 style="margin:0">Price year for real market sizes</h3>
+  <p class="muted" style="margin:0">Real (constant-price) sizes are in the prices of one year, and the price index is 100 in that year. Normally this is the latest year of reported market sizing, so it moves on when you mark a new year as reported. Choose a year only if your real sizes are in different prices.</p>
+  <div class="field" style="max-width:340px"><label for="price_base">Price year</label><select id="price_base" name="price_base"><option value="" {{ 'selected' if not t.price_base }}>Latest reported year ({{ t.last_actual_year }})</option>{% for y in range(t.first_year, t.last_year + 1) %}<option value="{{ y }}" {{ 'selected' if t.price_base == y }}>{{ y }}</option>{% endfor %}</select></div>
+  <div><button class="btn small outline" type="submit">Save price year</button></div>
+</form>
+
 <details style="margin:22px 0 80px;max-width:760px" {{ 'open' if request.args.get('edit') }}>
   <summary><b>Set the dates directly</b></summary>
   <form method="post" class="adm-form" style="padding:14px 0 0">

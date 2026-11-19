@@ -16,7 +16,7 @@
       <div class="field"><label for="city">City</label><input id="city" type="text" name="city" value="{{ form.city }}"></div>
     </div>
     <div class="row3 row" style="margin-top:14px">
-      <div class="field"><label for="ownership">Ownership</label><input id="ownership" type="text" name="ownership" value="{{ form.ownership }}" list="own-list"><datalist id="own-list">{% for o in ownership %}<option value="{{ o }}">{% endfor %}</datalist></div>
+      <div class="field"><label for="ownership">Ownership</label><select id="ownership" name="ownership">{% for o in ownership %}<option value="{{ o }}" {{ 'selected' if form.ownership == o }}>{{ o }}</option>{% endfor %}{% if form.ownership and form.ownership not in ownership %}<option value="{{ form.ownership }}" selected>{{ form.ownership }}</option>{% endif %}</select></div>
       <div class="field"><label for="ticker">Ticker</label><input id="ticker" type="text" name="ticker" value="{{ form.ticker }}"></div>
       <div class="field"><label for="exchange">Stock exchange</label><input id="exchange" type="text" name="exchange" value="{{ form.exchange }}"></div>
     </div>
@@ -69,6 +69,27 @@
       </table></div>
     </details>
     {% for k, m in errors.items() if k.startswith('fq_') %}<div class="err">{{ m }}</div>{% endfor %}
+  </fieldset>
+
+  <fieldset><legend>Volumes (optional)</legend>
+    <details {{ 'open' if form.get('prod_0_name') or prod_err }}>
+      <summary><b>{{ 'Edit product volumes' if form.get('prod_0_name') else 'Add product volumes' }}</b> <span class="muted small">for companies that sell something you can count</span></summary>
+      <p class="muted" style="margin:10px 0">One row per product or line, with a unit you choose (pick a suggestion or type your own, such as “MWh” or “thousand units”) and the volume for each year you have. Leave a year blank if unknown. A company can have several products or none.</p>
+      <div class="table-scroll"><table class="dtable" id="prod-table">
+        <thead><tr><th>Product</th><th>Unit</th>{% for y in fin_years %}<th style="text-align:right">{{ y }}{{ ysuf(y) }}</th>{% endfor %}</tr></thead>
+        <tbody>{% for i in range(n_prod) %}
+          <tr data-prod>
+            <td><input type="text" name="prod_{{ i }}_name" value="{{ form.get('prod_' ~ i ~ '_name', '') }}" class="{{ 'bad' if errors.get('prod_' ~ i ~ '_name') }}" style="min-width:150px" aria-label="Product {{ i + 1 }} name" title="{{ errors.get('prod_' ~ i ~ '_name', '') }}"></td>
+            <td><input type="text" name="prod_{{ i }}_unit" value="{{ form.get('prod_' ~ i ~ '_unit', '') }}" list="unit-list" style="min-width:110px" aria-label="Product {{ i + 1 }} unit"></td>
+            {% for y in fin_years %}{% set key = 'prod_' ~ i ~ '_' ~ y %}<td class="num-col"><input type="text" inputmode="decimal" name="{{ key }}" value="{{ form.get(key, '') }}" class="num {{ 'bad' if errors.get(key) }}" style="min-width:64px" aria-label="Product {{ i + 1 }} volume {{ y }}"></td>{% endfor %}
+          </tr>
+        {% endfor %}</tbody>
+      </table></div>
+      <datalist id="unit-list">{% for u in units %}<option value="{{ u }}">{% endfor %}</datalist>
+      <input type="hidden" name="prod_n" id="prod-n" value="{{ n_prod }}">
+      <p style="margin:10px 0 0"><button type="button" class="btn small outline" id="prod-add">Add another product</button></p>
+      {% for k, m in errors.items() if k.startswith('prod_') %}<div class="err">{{ m }}</div>{% endfor %}
+    </details>
   </fieldset>
 
   <fieldset><legend>Page sections</legend>

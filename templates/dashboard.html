@@ -60,6 +60,28 @@
   {% endif %}
   {% endfor %}
 
+  {% if 'dashboard.sizing' not in hidden %}
+  <div class="card" id="sizing" style="margin-top:24px">
+    <div class="panel-title"><h3>Market sizing, {{ title }}</h3><a href="{{ url_for('dashboard_export', table='market', **f) }}" class="small" title="Download these figures, every year and every tab, as a CSV file that opens in Excel">Export data</a></div>
+    <div class="panel-body table-scroll">
+      <div class="seg" role="tablist" data-tabset aria-label="Nominal, real or price index">{% for tb in sizing.tabs %}{% if tb.available %}<a href="#size-{{ tb.id }}" role="tab" class="{{ 'on' if loop.first }}">{{ tb.label }}</a>{% else %}<span role="tab" class="off" aria-disabled="true" title="{{ tb.why }}">{{ tb.label }}</span>{% endif %}{% endfor %}</div>
+      {% for tb in sizing.tabs if tb.available %}
+      <div id="size-{{ tb.id }}" data-pane {{ 'hidden' if not loop.first }}>
+        <table class="data fin">
+          <thead><tr><th>{{ tb.unit }}</th>{% for c in sizing.cols %}<th class="{{ 'est' if c.suffix == 'E' }}">{{ c.year }}{{ c.suffix }}</th>{% endfor %}</tr></thead>
+          <tbody>
+            <tr><td><b>{{ tb.main }}</b></td>{% for v in tb['values'] %}<td><b>{{ ('%.1f'|format(v)) if tb.kind == 'index' else fmt_bn(v, dec) }}</b></td>{% endfor %}</tr>
+            <tr class="sub"><td>{{ tb.growth_label }}</td>{% for g in tb.growth %}<td>{{ fmt_pct(g, 1, true) if g is not none else '' }}</td>{% endfor %}</tr>
+          </tbody>
+        </table>
+        {% if tb.id == 'real' %}<p class="small muted" style="margin:10px 0 0">Constant prices: price changes removed, so growth is volume growth.{% if sizing.coverage < 0.995 %} Real sizes are entered for {{ (sizing.coverage * 100)|round|int }}% of this selection by size; the rest is counted at nominal.{% endif %}</p>
+        {% elif tb.id == 'price' %}<p class="small muted" style="margin:10px 0 0">Nominal divided by real, so it is 100 in the base year and shows how prices have moved since.{% if sizing.coverage < 0.995 %} Based on the {{ (sizing.coverage * 100)|round|int }}% of this selection that has real sizes.{% endif %}</p>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
   <div class="card" id="breakdown" style="margin-top:24px">
     <div class="panel-title"><h3>Break down by</h3><span><a href="{{ url_for('dashboard', view=view) }}" class="small tbl-reset" data-active="{{ 1 if f else 0 }}"{% if not f %} hidden{% endif %}>Reset filters</a> <a href="{{ url_for('dashboard_export', view=view, **f) }}" class="small tbl-export" style="margin-left:10px" title="Download this table, with every year, as a CSV file that opens in Excel">Export data</a> <span class="small muted" style="margin-left:10px">Click a row to filter</span></span></div>
     <div class="tabs" role="tablist" style="margin-top:10px">
@@ -124,7 +146,7 @@
       <div class="panel-title"><h3>Top {{ chart_lines|length }} {{ view_names[view] }} over time</h3></div>
       <div class="panel-body">
         <div id="chart-lines"></div>
-        <script type="application/json" id="data-lines">{{ {'years': years, 'series': chart_lines, 'unit': unit, 'dec': 0 if view == 'company' else dec, 'forecastFrom': years[years.index(year_now) + 1], 'label': 'Top ' ~ view_names[view] ~ ' over time'}|tojson }}</script>
+        <script type="application/json" id="data-lines">{{ {'years': chart_years, 'series': chart_lines, 'unit': unit, 'dec': 0 if view == 'company' else dec, 'forecastFrom': chart_years[chart_years.index(year_now) + 1], 'label': 'Top ' ~ view_names[view] ~ ' over time'}|tojson }}</script>
       </div>
     </div>
     {% endif %}

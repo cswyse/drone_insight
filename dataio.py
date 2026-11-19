@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS dims (
     data TEXT NOT NULL DEFAULT '{}', PRIMARY KEY (kind, id)
 );
 CREATE TABLE IF NOT EXISTS market (
-    country TEXT NOT NULL, subsector TEXT NOT NULL, vertical TEXT NOT NULL, vals TEXT NOT NULL, conf TEXT,
+    country TEXT NOT NULL, subsector TEXT NOT NULL, vertical TEXT NOT NULL, vals TEXT NOT NULL, conf TEXT, real TEXT,
     PRIMARY KEY (country, subsector, vertical)
 );
 CREATE TABLE IF NOT EXISTS companies (
@@ -35,6 +35,10 @@ CREATE TABLE IF NOT EXISTS fin (
 CREATE TABLE IF NOT EXISTS fin_q (
     slug TEXT NOT NULL, year INTEGER NOT NULL, quarter INTEGER NOT NULL, revenue REAL, ebitda REAL,
     net_income REAL, capex REAL, conf TEXT, PRIMARY KEY (slug, year, quarter)
+);
+CREATE TABLE IF NOT EXISTS products (
+    slug TEXT NOT NULL, name TEXT NOT NULL, unit TEXT NOT NULL DEFAULT '', vols TEXT NOT NULL DEFAULT '{}',
+    sort INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (slug, name)
 );
 CREATE TABLE IF NOT EXISTS sections (
     id TEXT PRIMARY KEY, entity TEXT NOT NULL, title TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'text',
@@ -58,9 +62,9 @@ FIN_YEARS = timeline.FIN_YEARS          # years company financials can be entere
 _LEGACY_YEARS = list(cfg.YEARS)         # market values used to be stored as a list for these years
 # Panels built into the pages that can be switched off (id, label)
 BLOCKS = {
-    "dashboard": [("news", "Latest news"), ("chart", "Market size chart"), ("trend", "Top items over time"), ("heatmap", "Sub-sector by vertical grid")],
+    "dashboard": [("news", "Latest news"), ("chart", "Market size chart"), ("sizing", "Market sizing table"), ("trend", "Top items over time"), ("heatmap", "Sub-sector by vertical grid")],
     "company": [("news", "Latest news"), ("charts", "Revenue and margin charts"), ("financials", "Financial summary table"),
-                ("splits", "Revenue by country, sub-sector and vertical"), ("peers", "Peers")],
+                ("volumes", "Product volumes"), ("splits", "Revenue by country, sub-sector and vertical"), ("peers", "Peers")],
 }
 
 
@@ -157,6 +161,8 @@ def init():
             cols = [r["name"] for r in c.execute(f"PRAGMA table_info({table})")]
             if "conf" not in cols:
                 c.execute(f"ALTER TABLE {table} ADD COLUMN conf TEXT")
+        if "real" not in [r["name"] for r in c.execute("PRAGMA table_info(market)")]:     # real (constant-price) sizes
+            c.execute("ALTER TABLE market ADD COLUMN real TEXT")
         for r in c.execute("SELECT country, subsector, vertical, vals FROM market WHERE vals LIKE '[%'").fetchall():
             c.execute("UPDATE market SET vals=? WHERE country=? AND subsector=? AND vertical=?",
                       (json.dumps(_vals_dict(r["vals"])), r["country"], r["subsector"], r["vertical"]))
@@ -196,6 +202,17 @@ def load_market():
         return out
 
 
+def load_market_real():
+    """Real (constant-price) market sizes, only for the cells that have them."""
+    with db.conn() as c:
+        out = {}
+        for r in c.execute("SELECT country, subsector, vertical, real FROM market WHERE real IS NOT NULL"):
+            series = _window(_vals_dict(r["real"]))
+            if series is not None:
+                out[(r["country"], r["subsector"], r["vertical"])] = series
+        return out
+
+
 def load_market_conf():
     with db.conn() as c:
         return {(r["country"], r["subsector"], r["vertical"]): r["conf"] for r in c.execute("SELECT country, subsector, vertical, conf FROM market")
@@ -205,6 +222,40 @@ def load_market_conf():
 def load_companies():
     with db.conn() as c:
         return {r["slug"]: {**json.loads(r["data"] or "{}"), "slug": r["slug"], "name": r["name"]} for r in c.execute("SELECT * FROM companies ORDER BY name")}
+
+
+UNITS = ["units", "thousand units", "million units", "tonnes", "kilotonnes", "MWh", "GWh", "barrels", "litres", "kg",
+         "subscribers", "users", "transactions", "vehicles", "square metres", "shipments"]      # suggestions; any text can be typed
+
+
+def load_products():
+    """{slug: [{name, unit, vols: {year: volume}}]} in the order they were entered."""
+    out = {}
+    with db.conn() as c:
+        for r in c.execute("SELECT * FROM products ORDER BY slug, sort, name"):
+            out.setdefault(r["slug"], []).append({"name": r["name"], "unit": r["unit"], "vols": {int(k): v for k, v in json.loads(r["vols"] or "{}").items()}})
+    return out
+
+
+def known_units():
+    """Units already used, then the suggestions."""
+    with db.conn() as c:
+        used = [r["unit"] for r in c.execute("SELECT unit, COUNT(*) n FROM products WHERE unit != '' GROUP BY unit ORDER BY n DESC")]
+    return used + [u for u in UNITS if u not in used]
+
+
+def save_products(slug, items, window=None):
+    """Replace a company's products. items: [{name, unit, vols: {year: volume}}]. Volumes for years outside `window`
+    (the years the form shows) are kept for a product of the same name."""
+    with db.conn() as c:
+        old = {r["name"].lower(): json.loads(r["vols"] or "{}") for r in c.execute("SELECT name, vols FROM products WHERE slug=?", (slug,))}
+        c.execute("DELETE FROM products WHERE slug=?", (slug,))
+        for i, it in enumerate(items):
+            vols = {str(y): v for y, v in it["vols"].items()}
+            if window is not None:
+                vols.update({k: v for k, v in old.get(it["name"].lower(), {}).items() if int(k) not in window})
+            c.execute("INSERT INTO products (slug, name, unit, vols, sort) VALUES (?,?,?,?,?)", (slug, it["name"], it["unit"], json.dumps(vols), i))
+        db.bump(c)
 
 
 def load_fin():
@@ -296,9 +347,10 @@ def delete_dim(kind, dim_id):
     scrub_news(kind, dim_id)
 
 
-def save_market(cells, conf=None):
+def save_market(cells, conf=None, real=None):
     """cells: {(c, s, v): [vals]} to upsert; a value of None deletes the cell.
-    conf: {(c, s, v): level id or None}. A cell missing from conf keeps the level it had."""
+    conf: {(c, s, v): level id or None}. A cell missing from conf keeps the level it had.
+    real: {(c, s, v): [vals] or None} the optional real (constant-price) series of cells that already have a nominal size."""
     conf = conf or {}
     with db.conn() as c:
         for (co, su, ve), vals in cells.items():
@@ -316,6 +368,16 @@ def save_market(cells, conf=None):
             else:
                 c.execute("INSERT INTO market (country, subsector, vertical, vals) VALUES (?,?,?,?) "
                           "ON CONFLICT(country, subsector, vertical) DO UPDATE SET vals=excluded.vals", (co, su, ve, v))
+        for (co, su, ve), vals in (real or {}).items():
+            row = c.execute("SELECT real FROM market WHERE country=? AND subsector=? AND vertical=?", (co, su, ve)).fetchone()
+            if row is None:
+                continue
+            if vals is None:
+                c.execute("UPDATE market SET real=NULL WHERE country=? AND subsector=? AND vertical=?", (co, su, ve))
+                continue
+            stored = _vals_dict(row["real"]) if row["real"] else {}
+            stored.update({str(y): round(x, 6) for y, x in zip(cfg.YEARS, vals)})
+            c.execute("UPDATE market SET real=? WHERE country=? AND subsector=? AND vertical=?", (json.dumps(stored), co, su, ve))
         db.bump(c)
 
 
@@ -358,6 +420,7 @@ def delete_company(slug):
         c.execute("DELETE FROM companies WHERE slug=?", (slug,))
         c.execute("DELETE FROM fin WHERE slug=?", (slug,))
         c.execute("DELETE FROM fin_q WHERE slug=?", (slug,))
+        c.execute("DELETE FROM products WHERE slug=?", (slug,))
         c.execute("DELETE FROM section_values WHERE entity_id=? AND section_id IN (SELECT id FROM sections WHERE entity='company')", (slug,))
         db.bump(c)
     scrub_news("company", slug)
@@ -478,14 +541,14 @@ def write_default_sections():
 
 def wipe_all():
     with db.conn() as c:
-        for t in ("dims", "market", "companies", "fin", "fin_q", "sections", "section_values"):
+        for t in ("dims", "market", "companies", "fin", "fin_q", "products", "sections", "section_values"):
             c.execute(f"DELETE FROM {t}")
 
 
 def clear_figures():
     """Delete market sizes, companies and financials. Lists and sections are kept."""
     with db.conn() as c:
-        for t in ("market", "companies", "fin", "fin_q", "section_values"):
+        for t in ("market", "companies", "fin", "fin_q", "products", "section_values"):
             c.execute(f"DELETE FROM {t}")
         db.bump(c)
     scrub_all_company_news()
@@ -510,8 +573,11 @@ def seed_sample():
         for (co, su, ve), vals in st.market.items():
             h = sum(ord(ch) for ch in co + su + ve) % 8          # a spread of levels so the sample shows the feature
             lvl = "high" if h < 2 else ("low" if h == 7 else "medium")
-            c.execute("INSERT INTO market (country, subsector, vertical, vals, conf) VALUES (?,?,?,?,?)",
-                      (co, su, ve, json.dumps({str(y): round(x, 4) for y, x in zip(sample_data.YEARS, vals)}), lvl))
+            base_y = timeline.price_base()
+            infl = 0.015 + (sum(ord(ch) for ch in co) % 30) / 1000.0      # 1.5% to 4.4% a year, so the sample has a price index
+            real = {str(y): round(x / (1 + infl) ** (y - base_y), 4) for y, x in zip(sample_data.YEARS, vals)}
+            c.execute("INSERT INTO market (country, subsector, vertical, vals, conf, real) VALUES (?,?,?,?,?,?)",
+                      (co, su, ve, json.dumps({str(y): round(x, 4) for y, x in zip(sample_data.YEARS, vals)}), lvl, json.dumps(real)))
         for slug, co in st.companies.items():
             alloc = {"country": {}, "subsector": {}, "vertical": {}}
             idx = {"country": 0, "subsector": 1, "vertical": 2}
@@ -533,6 +599,16 @@ def seed_sample():
                 c.execute("INSERT INTO fin (slug, year, revenue, gross_margin, ebitda, net_income, capex, employees, conf) VALUES (?,?,?,?,?,?,?,?,?)",
                           (slug, r["year"], round(r["revenue"], 1), round(r["gross_margin"], 4), round(r["ebitda"], 1),
                            round(r["net_income"], 1), round(r["capex"], 1), r["employees"], lvl))
+        sample_units = [("Core units", "thousand units"), ("Service contracts", "contracts"), ("Output", "tonnes"), ("Energy sold", "GWh"), ("Shipments", "shipments")]
+        for slug in st.companies:
+            h = sum(ord(ch) for ch in slug)
+            if h % 5 == 4:
+                continue                                       # some companies have no volumes
+            for k in range(2 if h % 4 == 0 else 1):
+                name, unit = sample_units[(h + k * 2) % len(sample_units)]
+                per = 0.4 + (h % 7) * 0.15 + k * 0.5            # revenue per unit, so volumes move with revenue
+                vols = {str(r["year"]): round(r["revenue"] / per * (1 + 0.01 * k) * (0.97 + 0.0006 * (h * (r["year"] - 2000) % 100)), 1) for r in st.fin[slug] if r["year"] <= sample_data.LAST_ACTUAL + 1}
+                c.execute("INSERT INTO products (slug, name, unit, vols, sort) VALUES (?,?,?,?,?)", (slug, name, unit, json.dumps(vols), k))
     write_default_sections()
     db.set_meta("data_seeded", "1")
     db.set_meta("sample_notice", "1")

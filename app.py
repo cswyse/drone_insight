@@ -260,19 +260,69 @@ def dashboard():
 
     top = rows[:5]
     unit = "US$ bn" if view != "company" else "US$ m"
-    chart_lines = [{"name": r["name"], "values": [round(v, 2) for v in r["series"]]} for r in top]
-    chart_bars = [{"year": y, "value": round(v, 2), "status": d.year_status(y)} for y, v in zip(d.YEARS, total)]
+    # The two charts show a fixed window around the current year, so they keep their shape as the timeline moves on
+    win = [i for i, y in enumerate(d.YEARS) if cfg.ESTIMATE_YEAR - cfg.CHART_YEARS_BACK <= y <= cfg.ESTIMATE_YEAR + cfg.CHART_YEARS_AHEAD]
+    chart_years = [d.YEARS[i] for i in win]
+    chart_lines = [{"name": r["name"], "values": [round(r["series"][i], 2) for i in win]} for r in top]
+    chart_bars = [{"year": d.YEARS[i], "value": round(total[i], 2), "status": d.year_status(d.YEARS[i])} for i in win]
+    sizing = market_sizing(f)
     title = " · ".join(d.DIM_LOOKUP[k][v]["name"] for k, v in f.items()) if f else "Global market"
 
     blocks = [{"kind": dim, "name": d.DIM_LOOKUP[dim][f[dim]]["name"], **d.section_blocks(dim, f[dim])} for dim in ("country", "subsector", "vertical") if dim in f]
     blocks = [b for b in blocks if b["facts"] or b["top"] or b["bottom"]]
     summ["conf"] = d.market_confidence(f)
     return render_template("dashboard.html", f=f, view=view, rows=rows, summ=summ, news=news, heat=heat, blocks=blocks,
-                           crumbs=crumbs, title=title, unit=unit, years=d.YEARS,
+                           crumbs=crumbs, title=title, unit=unit, years=d.YEARS, chart_years=chart_years, sizing=sizing,
                            chart_lines=chart_lines, chart_bars=chart_bars,
                            n_companies=len(d.breakdown("company", f)[0]), news_params=dict(f),
                            tabs=[("country", "Country"), ("subsector", "Sub-sector"), ("vertical", "Vertical"),
                                  ("company", "Company")])
+
+
+def market_sizing(f):
+    """The selection's market size over the whole timeline: nominal, real and price index, each with its change on the year before."""
+    def yoy(vals):
+        return [None if i == 0 or not vals[i - 1] or vals[i] is None else vals[i] / vals[i - 1] - 1 for i in range(len(vals))]
+    cols = [{"year": y, "suffix": timeline.year_suffix(y)} for y in d.YEARS]
+    nom = d.market_series(f, "nominal")
+    tabs = [{"id": "nominal", "label": "Nominal", "unit": "US$ bn, current prices", "main": "Market size", "values": nom, "growth_label": "Growth", "growth": yoy(nom), "kind": "size", "available": True}]
+    pr = d.price_info(f)
+    real = d.market_series(f, "real") if pr else []
+    idx = pr["index"] if pr else []
+    why = "Real sizes have not been added yet" if not d.has_real() else "No real sizes for this selection"
+    base = timeline.price_base()
+    tabs.append({"id": "real", "label": "Real", "unit": f"US$ bn, constant {base} prices", "main": "Market size", "values": real, "growth_label": "Real growth",
+                 "growth": yoy(real) if pr else [], "kind": "size", "available": bool(pr), "why": why})
+    tabs.append({"id": "price", "label": "Price index", "unit": f"{base} = 100, nominal ÷ real", "main": "Price index", "values": idx, "growth_label": "Price change",
+                 "growth": yoy(idx) if pr else [], "kind": "index", "available": bool(pr), "why": why})
+    return {"cols": cols, "tabs": tabs, "coverage": pr["coverage"] if pr else None}
+
+
+def _title(f):
+    return " / ".join(d.DIM_LOOKUP[k][v]["name"] for k, v in f.items()) if f else "Global market"
+
+
+def market_sizing_csv(f):
+    """The market sizing table (every tab) for the current selection."""
+    sz = market_sizing(f)
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow([f"{settings.load()['brand']['name']} market sizing export"])
+    w.writerow(["Selection", _title(f)])
+    w.writerow(["Timeline", timeline.describe()["note"] + " (E = estimate, F = forecast)"])
+    w.writerow(["Exported", date.today().isoformat()])
+    if sz["coverage"] is not None and sz["coverage"] < 0.995:
+        w.writerow(["Note", f"Real sizes and the price index cover {round(sz['coverage'] * 100)}% of this selection by size"])
+    w.writerow([])
+    w.writerow(["Series", "Unit"] + [f"{c['year']}{c['suffix']}" for c in sz["cols"]])
+    rnd = lambda v, n: "" if v is None else round(v, n)
+    for t in [t for t in sz["tabs"] if t["available"]]:
+        dec = 2 if t["kind"] == "index" else 3
+        w.writerow([f"{t['label']}: {t['main']}", t["unit"]] + [rnd(v, dec) for v in t["values"]])
+        w.writerow([f"{t['label']}: {t['growth_label']}", "% on previous year"] + [rnd(None if v is None else v * 100, 2) for v in t["growth"]])
+    slug = re.sub(r"[^a-z0-9]+", "-", f"{_title(f)}-market-sizing".lower()).strip("-")
+    return Response("\ufeff" + out.getvalue(), mimetype="text/csv",
+                    headers={"Content-Disposition": f'attachment; filename="{slug}-{date.today().isoformat()}.csv"'})
 
 
 @app.route("/dashboard/export")
@@ -282,6 +332,8 @@ def dashboard_export():
     view = request.args.get("view")
     if view not in d.DIM_ORDER or (view != "company" and view in f):
         view = default_view(f)
+    if request.args.get("table") == "market":
+        return market_sizing_csv(f)
     rows, total = d.breakdown(view, f)
     h, fc = d.cagr_years()
     company = view == "company"
@@ -297,7 +349,7 @@ def dashboard_export():
     w.writerow([f"{settings.load()['brand']['name']} export"])
     w.writerow(["Selection", title])
     w.writerow(["Broken down by", {"country": "Country", "subsector": "Sub-sector", "vertical": "Vertical", "company": "Company"}[view]])
-    w.writerow(["Unit", unit + (" (company revenue within the selection)" if company else "")])
+    w.writerow(["Unit", unit + (" (company revenue within the selection, as reported)" if company else "")])
     w.writerow(["Timeline", timeline.describe()["note"] + " (E = estimate, F = forecast)"])
     w.writerow(["Exported", date.today().isoformat()])
     w.writerow([])
@@ -318,6 +370,40 @@ def dashboard_export():
     slug = re.sub(r"[^a-z0-9]+", "-", f"{title}-{view}".lower()).strip("-")
     return Response("\ufeff" + out.getvalue(), mimetype="text/csv",
                     headers={"Content-Disposition": f'attachment; filename="{slug}-{date.today().isoformat()}.csv"'})
+
+
+@app.route("/company/<slug>/export")
+def company_export(slug):
+    """The company's financial summary (annual, and quarterly if it has them) as a CSV that opens in Excel."""
+    co = d.STORE.companies.get(slug)
+    if not co:
+        abort(404)
+    fin, fin_q = d.STORE.fin.get(slug, []), d.STORE.fin_q.get(slug, [])
+    pct = lambda v: "" if v is None else round(v * 100, 2)
+    num = lambda v: "" if v is None else round(v, 2)
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow([f"{co['name']}: financial summary"])
+    w.writerow(["Unit", "US$ m (employees as a count)"])
+    w.writerow(["Timeline", timeline.describe()["note"] + " (E = estimate)"])
+    w.writerow(["Exported", date.today().isoformat()])
+    w.writerow([])
+    lab = lambda r: dataio.LEVEL[r["conf"]]["name"] if r.get("conf") in dataio.LEVEL else ""
+    w.writerow(["Annual"] + [f"{r['year']}{'E' if r['status'] == 'E' else ''}" for r in fin])
+    for name, key, fn in (("Revenue", "revenue", num), ("Growth %", "growth", pct), ("Gross margin %", "gross_margin", pct), ("EBITDA", "ebitda", num),
+                          ("EBITDA margin %", "ebitda_margin", pct), ("Net income", "net_income", num), ("Capital expenditure", "capex", num), ("Employees", "employees", num)):
+        w.writerow([name] + [fn(r.get(key)) for r in fin])
+    w.writerow(["Confidence"] + [lab(r) for r in fin])
+    w.writerow(["Estimated from other years (not reported)"] + ["yes" if r.get("extrapolated") else "" for r in fin])
+    if fin_q:
+        w.writerow([])
+        w.writerow(["Quarterly"] + [f"{r['short']}{'E' if r.get('projected') or r['status'] == 'E' else ''}" for r in fin_q])
+        for name, key, fn in (("Revenue", "revenue", num), ("YoY growth %", "yoy", pct), ("QoQ growth %", "qoq", pct), ("EBITDA", "ebitda", num),
+                              ("EBITDA margin %", "ebitda_margin", pct), ("Net income", "net_income", num), ("Capital expenditure", "capex", num)):
+            w.writerow([name] + [fn(r.get(key)) for r in fin_q])
+        w.writerow(["Confidence"] + [lab(r) for r in fin_q])
+    return Response("\ufeff" + out.getvalue(), mimetype="text/csv",
+                    headers={"Content-Disposition": f'attachment; filename="{slug}-financials-{date.today().isoformat()}.csv"'})
 
 
 @app.route("/company/<slug>")
@@ -345,7 +431,7 @@ def company(slug):
                            bd=d.company_breakdowns(slug), news=d.company_news(slug, 6), peers=d.peers(slug),
                            fin_q=d.STORE.fin_q.get(slug, []),
                            chart_revq=[{"year": r["short"], "value": round(r["revenue"], 1), "status": r["status"]} for r in d.STORE.fin_q.get(slug, [])[-12:]],
-                           chart_rev=chart_rev, chart_margin=chart_margin, slice_info=slice_info, f=f, back=back,
+                           chart_rev=chart_rev, chart_margin=chart_margin, products=d.STORE.products.get(slug, []), slice_info=slice_info, f=f, back=back,
                            blocks=d.section_blocks("company", slug))
 
 
@@ -468,6 +554,7 @@ def api_market():
     rows, total = d.breakdown(view, f)
     return jsonify({
         "filters": f, "view": view, "years": d.YEARS, "unit": "US$ bn (company view: US$ m)",
+        "price_index": (lambda p: None if not p else {"base_year": p["base"], "values": [None if v is None else round(v, 2) for v in p["index"]]})(d.price_info(f)),
         "total": [round(v, 3) for v in total],
         "current_year": cfg.ESTIMATE_YEAR,
         "rows": [{"id": r["id"], "name": r["name"], "size_current_year": round(r["size"], 3), "share": round(r["share"], 4),

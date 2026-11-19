@@ -151,8 +151,18 @@ Market sizes are annual. A company can optionally report by quarter, and then:
 - **Companies active** = the number of companies with revenue in the current selection.
 - **News on a dashboard slice**: items for the exact selection first; if there are too few, it widens step by step (vertical, then sub-sector, then country).
 
+## Real and nominal market sizes, price index and product volumes
+
+- **Market sizing** has two tabs. **Nominal** is the normal market size in current prices. **Real** is optional: the same rows in constant prices of the **price year**, which is set once under **Timeline** (the price index is 100 in that year). By default it is the latest reported year, so it moves on when you mark a new year as reported. A row needs its nominal size first. For a quick start, "Fill empty rows" on the Real tab creates real sizes from nominal at an assumed price growth a year, and you can then overwrite the rows you have real data for. In the CSV, add a `basis` column (`nominal` or `real`); real rows follow their nominal row.
+- The dashboard has a **Market sizing** table for the current view and filters: market size for every year of the timeline, with growth. When real data exists the **Nominal**, **Real** and **Price index** tabs are all available; tabs without data for the selection are greyed out. Rows with no real size are counted at nominal in the Real tab, and a note says what share of the selection has real data. **Export data** on the table downloads every tab as a CSV. The breakdown table and company figures are always nominal.
+- **Price index** is derived, not entered: nominal ÷ real for the cells that have both, rescaled so it is 100 in the price year (so it only equals 100 in that year, and shows price movement since). It is on the Price index tab, in the export and in the API.
+- **Company ownership** is a dropdown (the choices are `OWNERSHIP` in `dataio.py`).
+- **Product volumes:** each company can have no products, or several. Each has a name, a unit you pick or type (for example "MWh" or "thousand units") and a volume per year, entered in one compact grid on the company form ("Add another product" adds a row). The company page shows them in a Volumes table with latest growth and CAGR. Volumes can also be imported and exported as CSV (Companies page): `company`, `product`, `unit`, then year columns. Volumes are for display; they do not change revenue or market sizes.
+
 ## Exporting dashboard data and attaching report files
 
+- **Export data** on a company page downloads its financial summary (annual, plus quarterly if it has them) as a CSV.
+- The two charts at the top of the dashboard always show 11 years: 5 before and 5 after the current year (`CHART_YEARS_BACK` and `CHART_YEARS_AHEAD` in `config.py`), so they keep their shape as the timeline moves forward. Tables show every year.
 - **Export data** (Dashboard, "Break down by" panel) downloads the table you are looking at as a CSV that opens in Excel: the current filters and tab, the headline figures and every year of the timeline (marked E for estimate, F for forecast). It is for subscribers, like the dashboard.
 - **Report files:** each report can have a PDF, a data file (Excel `.xlsx`/`.xls` or `.csv`), or both. Upload them under the report's edit page in the admin. Subscribers see a download button for each one that is attached. Files are stored privately and are included in backups.
 

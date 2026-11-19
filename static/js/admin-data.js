@@ -33,3 +33,21 @@
     update();
   });
 })();
+
+// Company form: add another product row
+(function () {
+  var btn = document.getElementById("prod-add"), table = document.getElementById("prod-table");
+  if (!btn || !table) return;
+  btn.addEventListener("click", function () {
+    var body = table.tBodies[0], last = body.rows[body.rows.length - 1], n = body.rows.length;
+    var row = last.cloneNode(true);
+    Array.prototype.forEach.call(row.querySelectorAll("input"), function (inp) {
+      inp.name = inp.name.replace(/^prod_\d+_/, "prod_" + n + "_");
+      inp.value = ""; inp.classList.remove("bad"); inp.title = "";
+      inp.setAttribute("aria-label", inp.getAttribute("aria-label").replace(/Product \d+/, "Product " + (n + 1)));
+    });
+    body.appendChild(row);
+    document.getElementById("prod-n").value = n + 1;
+    row.querySelector("input").focus();
+  });
+})();

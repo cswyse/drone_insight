@@ -6,36 +6,50 @@
   <span><a class="btn small outline" href="{{ url_for('admin_market_csv') }}">Download all as CSV</a></span></div>
 <p class="muted" style="max-width:48em">Market size in <b>US$ billions</b> for one country at a time. Each row is a sub-sector and vertical. You do not need to fill every year: enter a few and the rest are filled in. Gaps between your numbers are smoothed, and years after your last number grow at the growth rate you give (or the rate implied by your numbers). Leave a row empty if it does not exist.</p>
 <p class="muted" style="max-width:48em"><b>Confidence</b> says how far to trust each row: from reported data down to a low-confidence estimate. The dashboard shows it next to the figures and averages it across a selection, weighted by size. {% for lv in CONF_LEVELS %}<br><b>{{ lv.name }}.</b> {{ lv.desc }}{% endfor %}</p>
+<div class="tabs" role="tablist" style="margin-top:14px">
+  <a role="tab" href="{{ url_for('admin_market', country=cid) }}" class="{{ 'on' if not real }}">Nominal (current prices)</a>
+  <a role="tab" href="{{ url_for('admin_market', country=cid, basis='real') }}" class="{{ 'on' if real }}">Real (constant prices){% if n_real %} &middot; {{ n_real }} rows{% endif %}</a>
+</div>
+{% if real %}
+<p class="muted" style="max-width:48em">Optional. <b>Real</b> sizes are the same markets with price changes removed, in constant prices of a base year. Add them row by row, or fill them from the nominal sizes with an assumed price growth (below). The dashboard then offers a Nominal / Real switch and derives the <b>price index</b> (nominal &divide; real) and price growth. Real sizes are in constant {{ price_base }} prices (change this under <a href="{{ url_for('admin_timeline') }}">Timeline</a>). A row needs its nominal size first. Rows with no real size are shown at nominal when Real is selected.</p>
+{% endif %}
 <form method="get" class="toolbar" style="padding-top:6px">
+  {% if real %}<input type="hidden" name="basis" value="real">{% endif %}
   <label for="country"><b>Country</b></label>
   <select id="country" name="country" onchange="this.form.submit()">{% for c in COUNTRY.values() %}<option value="{{ c.id }}" {{ 'selected' if c.id == cid }}>{{ c.name }}</option>{% endfor %}</select>
   <noscript><button class="btn small" type="submit">Show</button></noscript>
 </form>
 <form method="post" class="adm-form" style="max-width:none;padding-bottom:20px" data-grid>
-  <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="country" value="{{ cid }}">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="country" value="{{ cid }}">{% if real %}<input type="hidden" name="basis" value="real">{% endif %}
   <div class="table-scroll"><table class="dtable" id="market-grid">
-    <thead><tr><th>Sub-sector · vertical</th>{% for y in years %}<th style="text-align:right">{{ y }}{{ ysuf(y) }}</th>{% endfor %}<th style="text-align:right">Growth % a year</th><th>Confidence</th></tr></thead>
+    <thead><tr><th>Sub-sector · vertical</th>{% for y in years %}<th style="text-align:right">{{ y }}{{ ysuf(y) }}</th>{% endfor %}<th style="text-align:right">Growth % a year</th><th>{{ 'Price index now' if real else 'Confidence' }}</th></tr></thead>
     <tbody>
     {% for row in grid %}
       <tr>
         <td class="rowlabel">{{ row.s.name }} · <span class="muted">{{ row.v.name }}</span></td>
         {% for c in row.cells %}<td class="num-col"><input type="text" inputmode="decimal" class="num {{ 'bad' if c.err }}" name="{{ c.key }}" value="{{ c.value }}" data-year="{{ loop.index0 }}" title="{{ c.err or '' }}" aria-label="{{ row.s.name }}, {{ row.v.name }}, {{ years[loop.index0] }}"></td>{% endfor %}
         <td class="num-col"><input type="text" inputmode="decimal" class="num {{ 'bad' if errors[row.gkey] }}" name="{{ row.gkey }}" value="{{ row.g }}" placeholder="auto" aria-label="Growth for {{ row.s.name }}, {{ row.v.name }}"></td>
-        <td><select name="{{ row.ckey }}" class="conf-select" aria-label="Confidence for {{ row.s.name }}, {{ row.v.name }}"><option value="">Default ({{ CONF[config_default].short }})</option>{% for lv in CONF_LEVELS %}<option value="{{ lv.id }}" {{ 'selected' if row.conf == lv.id }}>{{ lv.name }}</option>{% endfor %}</select></td>
+        {% if real %}<td class="num-col">{{ ("%.1f"|format(row.index)) if row.index else ("" if row.has_nominal else "no nominal") }}</td>{% else %}        <td><select name="{{ row.ckey }}" class="conf-select" aria-label="Confidence for {{ row.s.name }}, {{ row.v.name }}"><option value="">Default ({{ CONF[config_default].short }})</option>{% for lv in CONF_LEVELS %}<option value="{{ lv.id }}" {{ 'selected' if row.conf == lv.id }}>{{ lv.name }}</option>{% endfor %}</select></td>{% endif %}
       </tr>
     {% endfor %}
     </tbody>
     <tfoot><tr><td style="text-align:left">Total for {{ COUNTRY[cid].name }}</td>{% for y in years %}<td data-total="{{ loop.index0 }}">0</td>{% endfor %}<td></td><td></td></tr></tfoot>
   </table></div>
-  <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:6px"><button class="btn" type="submit">Save {{ COUNTRY[cid].name }}</button>
+  <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:6px"><button class="btn" type="submit">Save {{ COUNTRY[cid].name }}{{ ' real sizes' if real }}</button>
     <span class="small muted">Totals update as you type.</span></div>
 </form>
+{% if real %}
+<form method="post" class="adm-form" style="padding:0 0 24px;max-width:none" onsubmit="return confirm('Fill the empty real rows for {{ COUNTRY[cid].name|e }} from the nominal sizes?')">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="country" value="{{ cid }}"><input type="hidden" name="basis" value="real"><input type="hidden" name="action" value="fill_real">
+  <div class="toolbar" style="padding:0"><b>Quick start</b> <span class="muted">Fill empty real rows from nominal at</span> <input type="text" inputmode="decimal" name="infl" value="2.5" style="width:70px" aria-label="Price growth percent a year"> <span class="muted">% price growth a year</span> <button class="btn small outline" type="submit">Fill empty rows</button></div>
+</form>
+{% endif %}
 
 <details style="margin:10px 0 80px;max-width:760px">
   <summary><b>Import many rows from a CSV</b></summary>
   <form method="post" action="{{ url_for('admin_market_import') }}" enctype="multipart/form-data" class="adm-form" style="padding:14px 0 0">
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-    <p class="muted" style="margin:0">Columns: <code>country</code>, <code>sub-sector</code>, <code>vertical</code>, an optional <code>confidence</code> (a level name such as “Reported” or “Low”), then years such as <code>{{ years[0] }}</code> to <code>{{ years[-1] }}</code>. Use the names or ids you set up. Blank years are filled in. The easiest way to start is to download the CSV above, edit it in a spreadsheet and upload it again. If anything is wrong, nothing is imported.</p>
+    <p class="muted" style="margin:0">Columns: <code>country</code>, <code>sub-sector</code>, <code>vertical</code>, an optional <code>basis</code> (<code>nominal</code> or <code>real</code>, default nominal; real rows come after their nominal row), an optional <code>confidence</code> (a level name such as “Reported” or “Low”), then years such as <code>{{ years[0] }}</code> to <code>{{ years[-1] }}</code>. Use the names or ids you set up. Blank years are filled in. The easiest way to start is to download the CSV above, edit it in a spreadsheet and upload it again. If anything is wrong, nothing is imported.</p>
     <div class="upload-row"><input type="file" name="file" accept=".csv,text/csv" required></div>
     <label class="checkrow"><input type="radio" name="mode" value="merge" checked><span>Update the rows in the file and keep everything else</span></label>
     <label class="checkrow"><input type="radio" name="mode" value="replace"><span>Replace all market sizes with the rows in the file (a backup is saved first)</span></label>
